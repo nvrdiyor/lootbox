@@ -1,0 +1,22 @@
+{
+  "name": "lootbox-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "LOOTBOX va LOOTBOX FIT brend vitrinasi (Uzum Market do'koni uchun) + admin panel",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node --disable-warning=ExperimentalWarning --watch --watch-preserve-output server/index.js --dev",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "seed": "node --disable-warning=ExperimentalWarning server/db/seed-cli.js",
+    "check": "node --disable-warning=ExperimentalWarning scripts/check.js && node --disable-warning=ExperimentalWarning scripts/check-proxy.js",
+    "og": "node scripts/make-og.js",
+    "shots": "node scripts/shots.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.0"
+  }
+}

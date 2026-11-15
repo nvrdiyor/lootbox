@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lootbox",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--disable-warning=ExperimentalWarning",
+        "--watch",
+        "--watch-preserve-output",
+        "server/index.js",
+        "--dev"
+      ],
+      "port": 3210
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# Matn fayllari hamma joyda bir xil (LF) qator oxiri bilan saqlanadi
+* text=auto eol=lf
+
+# Ikkilik fayllar: git ularning ichiga tegmaydi
+*.woff2 binary
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary

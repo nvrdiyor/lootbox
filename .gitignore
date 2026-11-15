@@ -1,0 +1,15 @@
+# Bog'liqliklar
+node_modules/
+
+# Maxfiy sozlamalar (admin paroli shu yerda) — hech qachon git'ga tushmaydi
+.env
+.env.*
+!.env.example
+
+# Baza va yuklangan rasmlar
+data/
+
+# Tizim fayllari
+*.log
+.DS_Store
+Thumbs.db

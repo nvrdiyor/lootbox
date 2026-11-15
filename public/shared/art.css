@@ -1,0 +1,48 @@
+/* Rasm o'rnidagi chizmalar va so'z-logotip — sayt ham, admin ham shu fayldan foydalanadi.
+   Ranglar element ustidagi o'zgaruvchilardan olinadi:
+   --tone (urg'u), --art-bg (fon), --art-line (chiziq), --art-garment (kiyim rangi). */
+
+.art {
+  position: relative;
+  isolation: isolate;
+  background: var(--art-bg, #121214);
+  color: var(--art-line, #f5f4ef);
+}
+
+.art__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.art__svg .a { stroke: var(--tone, #d4ff3a); }
+.art__svg .af { fill: var(--tone, #d4ff3a); stroke: none; }
+.art__svg .sf { fill: color-mix(in oklab, var(--tone, #d4ff3a) 13%, transparent); }
+.art__svg .d { opacity: .36; }
+.art__svg .cut { stroke: var(--art-bg, #121214); }
+.art__svg .cutfill { fill: var(--art-bg, #121214); }
+.art__svg .glow { fill: color-mix(in oklab, var(--tone, #d4ff3a) 20%, transparent); stroke: none; }
+.art__svg .g { fill: var(--art-garment, #f5f4ef); }
+.art__svg .gd { stroke: #fff; mix-blend-mode: difference; opacity: .42; stroke-width: 2.4; }
+
+/* So'z-logotip: balandligi = 1em, rangi matn rangidan */
+.wm {
+  display: block;
+  height: 1em;
+  width: auto;
+  overflow: visible;
+  fill: currentColor;
+}
+.wm__l--x { fill: var(--wm-x, var(--accent, #d4ff3a)); }
+.wm__fit path { fill: var(--wm-fit, var(--accent, #ff4b1f)); }
+.wm-img { height: 1em; width: auto; }
+
+/* Quti belgisi */
+.mark__top { fill: var(--accent, #d4ff3a); }
+.mark__left { fill: currentColor; }
+.mark__right { fill: currentColor; opacity: .5; }
