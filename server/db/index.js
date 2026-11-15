@@ -4,11 +4,13 @@ import { config } from '../config.js';
 import { MIGRATIONS } from './schema.js';
 
 export const db = new DatabaseSync(config.dbFile);
+// busy_timeout BIRINCHI turishi shart: baza band bo'lsa (masalan, shu payt `npm run catalog` yozayotgan
+// bo'lsa) keyingi buyruqlar kutadi. Oxirida tursa, server ishga tushishda "database is locked" bilan yiqiladi.
 db.exec(`
+  PRAGMA busy_timeout = 4000;
   PRAGMA journal_mode = WAL;
   PRAGMA synchronous = NORMAL;
   PRAGMA foreign_keys = ON;
-  PRAGMA busy_timeout = 4000;
 `);
 
 const statements = new Map();

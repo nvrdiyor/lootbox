@@ -35,6 +35,39 @@ const app = createApp();
 const ORIGIN = 'http://localhost:3210';
 const request = (url, init = {}) => app.fetch(new Request(ORIGIN + url, init));
 
+// ---- Boshlang'ich ma'lumot: haqiqiy katalog (LOOTBOX) va namuna (FIT) -------------
+const catalog = await import('../server/db/catalog.js');
+const { CATALOG_PRODUCTS, CATALOG_SLIDES } = await import('../server/db/catalog-data.js');
+const seeded = repo.listProducts({ brand: 'lootbox' });
+eq(seeded.length, CATALOG_PRODUCTS.length, 'katalog: LOOTBOX tovarlari yozilgan');
+ok(
+  seeded.every((item) => !item.is_demo && /^https:\/\/uzum\.uz\/uz\/product\/[a-z0-9-]+\?skuId=\d+$/.test(item.uzum_url)),
+  'katalog: haqiqiy tovarlar demo emas, har birida Uzum’dagi variant havolasi bor',
+);
+eq(new Set(CATALOG_PRODUCTS.map((item) => item.uzum_url)).size, CATALOG_PRODUCTS.length, 'katalog: Uzum havolalari takrorlanmaydi');
+eq(seeded[0].uzum_url, CATALOG_PRODUCTS[0].uzum_url, 'katalog: saytdagi tartib fayldagi tartibga mos');
+eq(repo.listSlides({ brand: 'lootbox' }).length, CATALOG_SLIDES.length, 'katalog: LOOTBOX slaydlari yozilgan');
+eq(repo.demoCounts().products, repo.listProducts({ brand: 'fit' }).length, 'katalog: faqat FIT namunasi demo deb belgilangan');
+const seededAgain = catalog.seedCatalog();
+eq(seededAgain.products + seededAgain.categories + seededAgain.slides, 0, 'katalog: qayta yozilganda takror tovar qo‘shilmaydi');
+// Tovar rasmlari loyihaning o'zida: har bir nom uchun to'liq rasm va kichik nusxa bor, ikkalasi ham fonsiz
+const mediaNames = CATALOG_PRODUCTS.flatMap((item) => item.media);
+ok(
+  mediaNames.length >= CATALOG_PRODUCTS.length && mediaNames.every((name) => ['.webp', '.t.webp'].every((ext) => {
+    const info = fs.existsSync(path.join(catalog.MEDIA_DIR, name + ext)) && images.sniffImage(fs.readFileSync(path.join(catalog.MEDIA_DIR, name + ext)));
+    return info && info.alpha;
+  })),
+  'katalog: har bir tovar uchun fonsiz rasm va kichik nusxasi loyihada bor',
+);
+ok(seeded.every((item) => item.images.length >= 1 && item.images.every((image) => image.cutout)), 'katalog: birinchi ishga tushirishda tovarlarga fonsiz rasmlar biriktiriladi');
+const mediaAgain = catalog.importCatalogMedia();
+ok(mediaAgain.images === 0 && mediaAgain.skipped === CATALOG_PRODUCTS.length, 'katalog: rasmi bor tovarga qayta biriktirilmaydi');
+eq(catalog.catalogPhotoStatus().withoutPhotos, 0, 'katalog: rasmsiz tovar qolmadi');
+// Shu paytdagi fayllar soni — keyingi tekshiruvlar "ortiqcha fayl qolmadi" ni shunga solishtiradi
+const uploadsDir = path.join(tmp, 'uploads');
+const baseFiles = fs.readdirSync(uploadsDir).length;
+eq(baseFiles, mediaNames.length * 2, 'katalog: har bir rasm kichik nusxasi bilan saqlangan');
+
 // ---- Matn va havolalar -------------------------------------------------------
 eq(text.slugify('Oversize futbolka — Basic (qora)'), 'oversize-futbolka-basic-qora', 'slug: oddiy nom');
 eq(text.slugify('Magnitli qo‘l isitgich'), 'magnitli-qol-isitgich', 'slug: o‘ belgisi');
@@ -80,6 +113,19 @@ eq(images.sniffImage(Buffer.from('MZ' + 'x'.repeat(60))), null, 'dastur fayli ra
 const hugePng = Buffer.from(PNG);
 hugePng.writeUInt32BE(20000, 16);
 eq(images.sniffImage(hugePng), null, 'juda katta o‘lchamli rasm rad etiladi');
+// Shaffoflik (fonsiz rasm) baytlardan aniqlanadi: RGBA PNG — bor, oddiy (VP8) WebP — yo'q
+eq(png.alpha, true, 'rasm: shaffof kanalli PNG fonsiz deb taniladi');
+const OPAQUE = Buffer.alloc(48);
+OPAQUE.write('RIFF', 0, 'latin1');
+OPAQUE.writeUInt32LE(40, 4);
+OPAQUE.write('WEBPVP8 ', 8, 'latin1');
+OPAQUE[23] = 0x9d;
+OPAQUE[24] = 0x01;
+OPAQUE[25] = 0x2a;
+OPAQUE.writeUInt16LE(300, 26);
+OPAQUE.writeUInt16LE(400, 28);
+const opaque = images.sniffImage(OPAQUE);
+ok(opaque && opaque.alpha === false && opaque.width === 300 && opaque.height === 400, 'rasm: shaffofligi yo‘q WebP oddiy surat deb taniladi');
 eq(images.isMediaName('../../.env'), false, 'media nomi: yuqoriga chiqish rad etiladi');
 eq(images.isMediaName('0123456789abcdef0123.t.webp'), true, 'media nomi: to‘g‘ri nom');
 let thrown = '';
@@ -107,6 +153,7 @@ ok(home.includes(product.slug), 'bosh sahifa: tovar havolasi bor');
 ok(home.includes('href="/fit"'), 'bosh sahifa: FIT ga o‘tish bor');
 ok(home.includes('https://uzum.uz/uz/shop/lootbox'), 'bosh sahifa: Uzum do‘kon havolasi');
 ok(!home.includes('undefined') && !home.includes('[object Object]'), 'bosh sahifa: "undefined" yo‘q');
+ok(home.includes('deck deck--cutout') && !home.includes('hero__glyph'), 'hero: fonsiz tovar rasmlari 3D sahnada, chizma belgi yo‘q');
 
 const fit = await (await request('/fit')).text();
 ok(fit.includes('data-brand="fit"') && fit.includes(fitProduct.slug), 'FIT sahifasi: o‘z tovarlari');
@@ -195,7 +242,7 @@ eq((await request(stored.url)).status, 404, 'rasm: tovardan olib tashlangan rasm
 eq((await request(second.url)).status, 200, 'rasm: qolgan rasm joyida');
 repo.deleteProduct(photoId);
 eq((await request(second.url)).status, 404, 'rasm: tovar o‘chirilganda rasmi ham o‘chadi');
-eq(fs.readdirSync(path.join(tmp, 'uploads')).length, 0, 'rasm: uploads papkasida ortiqcha fayl qolmaydi');
+eq(fs.readdirSync(uploadsDir).length, baseFiles, 'rasm: uploads papkasida ortiqcha fayl qolmaydi');
 
 // Hamma tovar yashirilsa — bo'sh holat (xato emas)
 const everyone = repo.listProducts({ brand: 'fit' });
@@ -245,6 +292,96 @@ await track({ id: 999999, kind: 'uzum' });
 await track({ id: product.id, kind: 'DROP TABLE' });
 await track({ id: product.id, kind: 'uzum' }, 'https://evil.example');
 eq(get('SELECT COALESCE(SUM(count), 0) AS n FROM stats_daily').n, 2, 'statistika: faqat o‘z saytimizdan kelgan to‘g‘ri hodisalar sanaladi');
+
+// ---- Tovar rasmlari saytda: fonsiz rasm (tovarning o'zi) va oddiy surat -------------------
+const { slidePhotos } = await import('../server/site/slide-photos.js');
+const withPhotos = repo.listProducts({ brand: 'lootbox', visibleOnly: true });
+const lootSlides = repo.listSlides({ brand: 'lootbox', visibleOnly: true });
+const photoHome = await (await request('/')).text();
+// Har bir slayddagi sahna rasmlari, sahifadagi tartibda
+const deckSources = [...photoHome.matchAll(/class="deck__face"><img[^>]*? src="([^"]+)"/g)].map((match) => match[1]);
+const expectedDeck = lootSlides.flatMap((slide) => slidePhotos(slide, withPhotos).map((image) => image.thumb_url));
+ok(expectedDeck.length >= lootSlides.length * 2 && deckSources.join() === expectedDeck.join(), 'hero: har bir slayd bog‘langan tovar yoki kategoriya rasmlarini ko‘rsatadi');
+const linkedSlide = lootSlides.find((slide) => slide.link_type === 'product');
+const linkedProduct = withPhotos.find((item) => String(item.id) === String(linkedSlide?.link_value));
+const linkedDeck = linkedSlide ? slidePhotos(linkedSlide, withPhotos) : [];
+ok(
+  linkedProduct && linkedDeck[0]?.id === linkedProduct.images[0].id
+    && linkedDeck.slice(linkedProduct.images.length).every((image) => withPhotos.some((item) => item.id !== linkedProduct.id && item.category_id === linkedProduct.category_id && item.images[0].id === image.id)),
+  'hero: tovarga bog‘langan slayd avval o‘sha tovarni, keyin shu kategoriyadagi boshqalarini ko‘rsatadi',
+);
+const firstCover = withPhotos[0].images[0];
+ok(firstCover.thumb_width > 0 && photoHome.includes(`srcset="${firstCover.thumb_url} ${firstCover.thumb_width}w, `), 'rasm: srcset kichik nusxaning haqiqiy enini ko‘rsatadi');
+ok(photoHome.includes('class="card__media art has-cutout"') && photoHome.includes('class="card__img card__img--cutout"'), 'kartochka: fonsiz rasm kartochka foni ustida, kesilmasdan chiqadi');
+ok(!/<img class="card__img card__img--cutout"[^>]*background-color/.test(photoHome), 'kartochka: fonsiz rasm ortiga fon rangi qo‘yilmaydi');
+ok(!photoHome.includes('badges--inline'), 'kartochka: fonsiz rasmda belgilar rasm burchagida turadi');
+ok(photoHome.includes('index__mini index__mini--cutout') && photoHome.includes('index__thumb art has-cutout'), 'kategoriyalar: qator yonida tovar rasmlari chiqadi');
+ok(photoHome.includes('spotlight__frame spotlight__frame--cutout'), 'tanlov: fonsiz rasm katta kartochkada chiqadi');
+const cutoutPage = await (await request(`/tovar/${withPhotos[0].slug}`)).text();
+ok(cutoutPage.includes('gallery__item art has-cutout') && cutoutPage.includes('class="is-cutout"'), 'tovar sahifasi: fonsiz rasm kesilmasdan ko‘rsatiladi');
+const fitHome = await (await request('/fit')).text();
+ok(fitHome.includes('hero__glyph') && !fitHome.includes('data-deck-card'), 'hero: rasmsiz bo‘lim (FIT) chizma belgida qoladi');
+
+// Oddiy surat (foni bor, o'z yozuvi bo'lishi mumkin): ramkada chiqadi, belgilar rasm ostidagi qatorda
+const plainA = repo.insertImage(images.storeImage({ full: OPAQUE, color: '#223344' }));
+const plainB = repo.insertImage(images.storeImage({ full: OPAQUE }));
+eq(plainA.cutout, false, 'rasm: oddiy surat fonsiz deb belgilanmaydi');
+const plainId = repo.createProduct({
+  brand: 'fit', category_id: null, name: 'Oddiy suratli sinov', tagline: '', description: '', features: '', price: 5000, old_price: 9000,
+  badge_new: 1, badge_hit: 0, featured: 0, visible: 1, dest_type: 'default', uzum_url: '', channel_url: '', dm_username: '', art: '',
+}, [plainA.id, plainB.id]);
+const plainSlide = repo.createSlide({
+  brand: 'fit', kicker: '', title: 'Suratli slayd', subtitle: '', cta_label: '', link_type: 'product', link_value: String(plainId), image_id: null, art: 'tee', tone: '', visible: 1,
+});
+const plainFit = await (await request('/fit')).text();
+ok(plainFit.includes('class="deck" data-deck') && !plainFit.includes('deck--cutout'), 'hero: oddiy suratlar kartochkalar to‘plami bo‘lib chiqadi');
+ok(plainFit.includes('class="card__media art has-photo"') && plainFit.includes('class="badges badges--inline"'), 'kartochka: oddiy suratda belgilar rasm ustida emas, matn qatorida');
+ok(plainFit.includes(`style="background-color:#223344"`), 'kartochka: oddiy surat yuklanguncha o‘rtacha rangi ko‘rinadi');
+repo.deleteSlide(plainSlide);
+repo.deleteProduct(plainId);
+
+// Slaydning o'z rasmi bo'lsa — butun ekranli fon (3D sahna emas)
+const slideImage = repo.insertImage(images.storeImage({ full: PNG }));
+const photoSlide = repo.createSlide({
+  brand: 'fit', kicker: '', title: 'Rasmli slayd', subtitle: '', cta_label: '', link_type: 'catalog', link_value: '', image_id: slideImage.id, art: 'tee', tone: '', visible: 1,
+});
+ok((await (await request('/fit')).text()).includes('hero__slide hero__slide--photo'), 'hero: rasm yuklangan slayd butun ekranli fon bilan chiqadi');
+repo.deleteSlide(photoSlide);
+
+// Yashirilgan tovarlarning rasmlari slaydga chiqmaydi
+const categorySlide = lootSlides.find((slide) => slide.link_type === 'category');
+const inCategory = withPhotos.filter((item) => String(item.category_id) === String(categorySlide.link_value));
+for (const item of inCategory) repo.patchProduct(item.id, 'visible', 0);
+const hiddenHome = await (await request('/')).text();
+ok(hiddenHome.includes('hero__glyph') && !inCategory.some((item) => hiddenHome.includes(item.images[0].thumb_url)), 'hero: yashirilgan tovarlar rasmi slaydda ko‘rinmaydi');
+for (const item of inCategory) repo.patchProduct(item.id, 'visible', 1);
+eq(fs.readdirSync(uploadsDir).length, baseFiles, 'rasm: sinovdan keyin uploads papkasida ortiqcha fayl qolmaydi');
+
+// Loyihadagi rasmlar yangilanganda (npm run catalog -- --replace-images): katalog qo'ygan rasmlar almashtiriladi,
+// admin paneldan yuklangan rasmga tegilmaydi
+const ownProduct = repo.getProduct(seeded[1].id);
+const ownImage = repo.insertImage(images.storeImage({ full: OPAQUE }));
+repo.updateProduct(ownProduct.id, ownProduct, [ownImage.id]);
+const oldFirst = repo.getProduct(seeded[0].id).images.map((image) => image.id);
+const swapped = catalog.importCatalogMedia({ replace: true });
+ok(
+  swapped.replaced === CATALOG_PRODUCTS.length - 1 && swapped.kept === 1 && swapped.failed.length === 0,
+  'katalog: rasmlar yangilanganda katalog qo‘ygan rasmlar almashtiriladi',
+  JSON.stringify(swapped),
+);
+const newFirst = repo.getProduct(seeded[0].id).images;
+ok(
+  newFirst.length === oldFirst.length && newFirst.every((image) => image.cutout && !oldFirst.includes(image.id)) && oldFirst.every((id) => !repo.getImage(id)),
+  'katalog: almashtirilgan eski rasm bazadan o‘chadi, yangisi fonsiz',
+);
+eq(repo.getProduct(ownProduct.id).images[0].id, ownImage.id, 'katalog: admin yuklagan rasm almashtirilmaydi');
+eq(catalog.importCatalogMedia({ replace: true, force: true }).replaced, CATALOG_PRODUCTS.length, 'katalog: majburlab almashtirish admin yuklaganini ham almashtiradi');
+ok(!repo.getImage(ownImage.id), 'katalog: majburlab almashtirilgan rasm o‘chiriladi');
+eq(fs.readdirSync(uploadsDir).length, baseFiles, 'katalog: almashtirishdan keyin uploads papkasida ortiqcha fayl qolmaydi');
+
+// Baza sozlamasi: kutish vaqti boshqa buyruqlardan OLDIN turadi (aks holda baza band paytida server yiqiladi)
+const dbSource = fs.readFileSync(new URL('../server/db/index.js', import.meta.url), 'utf8');
+ok(dbSource.indexOf('PRAGMA busy_timeout') > 0 && dbSource.indexOf('PRAGMA busy_timeout') < dbSource.indexOf('PRAGMA journal_mode'), 'baza: band bo‘lsa kutadi (busy_timeout birinchi buyruq)');
 
 // ---- Admin himoyasi -----------------------------------------------------------
 const adminExtra = await import('./check-admin.js').catch((err) => (err.code === 'ERR_MODULE_NOT_FOUND' ? null : Promise.reject(err)));

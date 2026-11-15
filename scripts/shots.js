@@ -83,7 +83,15 @@ const send = (method, params = {}) =>
   });
 const run = async (expression) =>
   (await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
+// Suratdan oldin sahifadan navbatdagi kadr kutiladi. Busiz ba'zan (telefon ko'rinishida, menyu ochilgan sahifadan
+// keyingi sahifada) surat eski kadrni qaytaradi: sahifa tayyor, lekin tasvir yangilanmagan bo'ladi.
+const nextFrame = () =>
+  run(`new Promise((resolve) => {
+    const timer = setTimeout(resolve, 500);
+    requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(timer); resolve(true); }));
+  })`);
 const shot = async (name) => {
+  await nextFrame();
   const reply = await send('Page.captureScreenshot', { format: 'jpeg', quality: 70 });
   fs.writeFileSync(path.join(outDir, `${name}.jpg`), Buffer.from(reply.result.data, 'base64'));
   console.log(`  ${name}.jpg`);

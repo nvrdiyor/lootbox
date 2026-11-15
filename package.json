@@ -11,6 +11,8 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch --watch-preserve-output server/index.js --dev",
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "seed": "node --disable-warning=ExperimentalWarning server/db/seed-cli.js",
+    "catalog": "node --disable-warning=ExperimentalWarning scripts/catalog.js",
+    "cutouts": "node --disable-warning=ExperimentalWarning scripts/cutouts.js",
     "check": "node --disable-warning=ExperimentalWarning scripts/check.js && node --disable-warning=ExperimentalWarning scripts/check-proxy.js",
     "og": "node scripts/make-og.js",
     "shots": "node scripts/shots.js"

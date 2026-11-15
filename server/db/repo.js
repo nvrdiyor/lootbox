@@ -1,6 +1,6 @@
 // Ma'lumotlar bilan ishlash: sayt va admin shu funksiyalar orqali o'qiydi/yozadi.
 // Qatorlar bazadagi ustun nomlari bilan qaytadi (snake_case), ustiga:
-//   product.images   — [{ id, url, thumb_url, width, height, color }]
+//   product.images   — [{ id, url, thumb_url, thumb_width, width, height, color, cutout }]
 //   product.category — { id, slug, name, art } yoki null
 import { all, get, run, tx, allDynamic, runDynamic, placeholders, now } from './index.js';
 import { removeImageFiles } from '../lib/images.js';
@@ -84,20 +84,26 @@ export function mapImage(row) {
     thumb_url: `/media/${row.thumb}`,
     width: row.width,
     height: row.height,
+    // Kichik nusxaning kengligi; eski yozuvlarda yo'q (null) — sayt uni o'zi hisoblaydi
+    thumb_width: row.thumb_width || null,
     color: row.color || '',
+    // Fonsiz rasm (tovarning o'zi kesib olingan): kesilmasdan, kartochka foni ustida ko'rsatiladi
+    cutout: Boolean(row.cutout),
   };
 }
 
 export function insertImage(meta) {
   const info = run(
-    'INSERT INTO images (file, thumb, mime, width, height, bytes, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO images (file, thumb, thumb_width, mime, width, height, bytes, color, cutout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     meta.file,
     meta.thumb,
+    meta.thumb_width || null,
     meta.mime,
     meta.width,
     meta.height,
     meta.bytes,
     meta.color || '',
+    meta.cutout ? 1 : 0,
     now(),
   );
   return getImage(Number(info.lastInsertRowid));
@@ -143,16 +149,16 @@ export function deleteOrphanImages({ ids = null, olderThanMs = 0 } = {}) {
 
 const CATEGORY_SELECT = `
   SELECT c.*,
-    i.file AS image_file, i.thumb AS image_thumb, i.width AS image_width, i.height AS image_height, i.color AS image_color,
+    i.file AS image_file, i.thumb AS image_thumb, i.thumb_width AS image_thumb_width, i.width AS image_width, i.height AS image_height, i.color AS image_color, i.cutout AS image_cutout,
     (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) AS product_total,
     (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.visible = 1) AS product_count
   FROM categories c LEFT JOIN images i ON i.id = c.image_id`;
 
 function mapCategory(row) {
   if (!row) return null;
-  const { image_file, image_thumb, image_width, image_height, image_color, ...rest } = row;
+  const { image_file, image_thumb, image_thumb_width, image_width, image_height, image_color, image_cutout, ...rest } = row;
   rest.image = image_file
-    ? mapImage({ id: row.image_id, file: image_file, thumb: image_thumb, width: image_width, height: image_height, color: image_color })
+    ? mapImage({ id: row.image_id, file: image_file, thumb: image_thumb, thumb_width: image_thumb_width, width: image_width, height: image_height, color: image_color, cutout: image_cutout })
     : null;
   return rest;
 }
@@ -402,14 +408,14 @@ export function reorderProducts(ids) {
 // ---- Hero slaydlar ---------------------------------------------------------
 
 const SLIDE_SELECT = `
-  SELECT s.*, i.file AS image_file, i.thumb AS image_thumb, i.width AS image_width, i.height AS image_height, i.color AS image_color
+  SELECT s.*, i.file AS image_file, i.thumb AS image_thumb, i.thumb_width AS image_thumb_width, i.width AS image_width, i.height AS image_height, i.color AS image_color, i.cutout AS image_cutout
   FROM slides s LEFT JOIN images i ON i.id = s.image_id`;
 
 function mapSlide(row) {
   if (!row) return null;
-  const { image_file, image_thumb, image_width, image_height, image_color, ...rest } = row;
+  const { image_file, image_thumb, image_thumb_width, image_width, image_height, image_color, image_cutout, ...rest } = row;
   rest.image = image_file
-    ? mapImage({ id: row.image_id, file: image_file, thumb: image_thumb, width: image_width, height: image_height, color: image_color })
+    ? mapImage({ id: row.image_id, file: image_file, thumb: image_thumb, thumb_width: image_thumb_width, width: image_width, height: image_height, color: image_color, cutout: image_cutout })
     : null;
   return rest;
 }

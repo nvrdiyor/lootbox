@@ -9,8 +9,9 @@ import { artSvg, toneFor, toneStyle } from '../art.js';
 import { icon } from '../icons.js';
 import { categoryUrl, productUrl } from '../context.js';
 import { page, logo } from '../layout.js';
+import { slidePhotos } from '../slide-photos.js';
 import {
-  splitWords, kicker, picture, price, badges, carousel, sectionHead, linkArrow, destButton, artKeyOf,
+  splitWords, kicker, picture, price, badges, carousel, sectionHead, linkArrow, destButton, artKeyOf, mediaKind,
 } from '../components.js';
 
 const two = (n) => String(n).padStart(2, '0');
@@ -36,6 +37,25 @@ function slideTarget(ctx, slide, products) {
     return url ? { href: url, external: true } : catalog;
   }
   return catalog;
+}
+
+/**
+ * 3D sahna: oldinda asosiy rasm, ortida yana ikkitasi. Bosilsa slayd havolasiga olib boradi.
+ * Fonsiz rasmlar (tovarning o'zi) ramkasiz, havoda turgandek ko'rsatiladi; oddiy suratlar — kartochka bo'lib.
+ */
+function deck(photos, { href, external, eager, chips }) {
+  const cutout = photos[0].cutout;
+  // sizes ataylab kamtarroq: telefonda brauzer to'liq rasmni emas, kichik nusxani tanlasin
+  const sizes = cutout ? '(min-width: 1024px) 34vw, 60vw' : '(min-width: 1024px) 26vw, 50vw';
+  return html`<div class="deck${cutout ? ' deck--cutout' : ''}" data-deck data-count="${photos.length}">
+    <div class="deck__glow"></div>
+    <a class="deck__cards" href="${href}"${external} tabindex="-1" aria-hidden="true">
+      ${photos.map((image, n) => html`<span class="deck__card${image.cutout ? ' deck__card--cutout' : ''}" data-deck-card data-pos="${n}" data-home="${n}" style="--i:${n}">
+        <span class="deck__face">${picture(image, { sizes, eager: eager && n === 0 })}</span>
+      </span>`)}
+    </a>
+    ${chips}
+  </div>`;
 }
 
 /** Sarlavhadagi har bir gap alohida qatordan boshlanadi: "Silliq sirpanish. / Aniq nishon." */
@@ -68,16 +88,27 @@ function hero(ctx, slides, products) {
     const cta = ctx.tr(slide, 'cta_label') || t.hero.fallbackCta;
     const tag = i === 0 ? 'h1' : 'h2';
     const external = target.external ? raw(' target="_blank" rel="noopener"') : '';
-    const media = slide.image
-      ? html`<div class="hero__photo">${picture(slide.image, { sizes: '100vw', eager: i === 0 })}</div>`
-      : html`<div class="hero__art art" data-tilt>
+    const chips = html`<span class="hero__chip hero__chip--a" data-tilt-layer>${brand.key === 'fit' ? 'FT' : 'LB'} / ${two(i + 1)}</span>
+          ${kick ? html`<span class="hero__chip hero__chip--b" data-tilt-layer>${kick}</span>` : ''}`;
+    // Uch xil ko'rinish: yuklangan rasm (butun ekran) → tovar rasmlaridan 3D to'plam → chizma belgi
+    const photos = slide.image ? [] : slidePhotos(slide, products);
+    let media;
+    let kind = '';
+    if (slide.image) {
+      kind = ' hero__slide--photo';
+      media = html`<div class="hero__photo">${picture(slide.image, { sizes: '100vw', eager: i === 0 })}</div>`;
+    } else if (photos.length) {
+      kind = ' hero__slide--deck';
+      media = deck(photos, { href: target.href, external, eager: i === 0, chips });
+    } else {
+      media = html`<div class="hero__art art" data-tilt>
           <div class="hero__ring hero__ring--a"></div>
           <div class="hero__ring hero__ring--b"></div>
           <div class="hero__glyph" data-tilt-layer>${artSvg(slide.art)}</div>
-          <span class="hero__chip hero__chip--a" data-tilt-layer>${brand.key === 'fit' ? 'FT' : 'LB'} / ${two(i + 1)}</span>
-          ${kick ? html`<span class="hero__chip hero__chip--b" data-tilt-layer>${kick}</span>` : ''}
+          ${chips}
         </div>`;
-    return html`<article class="hero__slide${slide.image ? ' hero__slide--photo' : ''}${i === 0 ? ' is-active' : ''}" data-hero-slide
+    }
+    return html`<article class="hero__slide${kind}${i === 0 ? ' is-active' : ''}" data-hero-slide
         data-tone="${tones[i].color}" style="${toneStyle(tones[i])}" aria-roledescription="slide" aria-label="${i + 1} / ${list.length}"${i === 0 ? '' : raw(' inert')}>
       <div class="hero__media">${media}</div>
       <div class="hero__content">
@@ -126,26 +157,34 @@ function marquee(ctx) {
   return html`<div class="marquee" data-marquee><div class="marquee__track">${group(false)}${group(true)}</div></div>`;
 }
 
-function categoryIndex(ctx, number) {
+function categoryIndex(ctx, number, products) {
   const { t, brand, categories } = ctx;
   if (!categories.length) return '';
+  // Kategoriyadagi rasmli tovarlarning muqovalari: qator yonida kichik to'plam bo'lib turadi,
+  // kategoriyaning o'z rasmi bo'lmasa sichqoncha ostidagi katta rasm ham shulardan olinadi
+  const coversOf = (cat) => products.filter((item) => item.category_id === cat.id && item.images.length).slice(0, 3).map((item) => item.images[0]);
   return html`<section class="section section--index" id="kategoriyalar">
     ${sectionHead({ label: t.home.categoriesKicker, number, title: t.home.categoriesTitle })}
     <div class="wrap">
       <ul class="index" role="list" data-reveal-group>
         ${categories.map((cat, i) => {
           const tone = toneFor(brand.key, cat.id);
+          const covers = coversOf(cat);
+          const cover = cat.image || covers[0] || null;
           return html`<li data-reveal style="--d:${i * 60}">
-            <a class="index__row" href="${categoryUrl(brand.key, cat)}" data-index-row style="${toneStyle(tone)}">
+            <a class="index__row${covers.length ? ' has-stack' : ''}" href="${categoryUrl(brand.key, cat)}" data-index-row style="${toneStyle(tone)}">
               <span class="index__n">${two(i + 1)}</span>
               <span class="index__main">
                 <span class="index__name">${ctx.tr(cat, 'name')}</span>
                 ${cat.tagline ? html`<span class="index__tag">${ctx.tr(cat, 'tagline')}</span>` : ''}
               </span>
+              ${covers.length
+                ? html`<span class="index__stack" aria-hidden="true">${covers.map((image, k) => html`<span class="index__mini${image.cutout ? ' index__mini--cutout' : ''}" style="--k:${k}">${picture(image, { sizes: '72px' })}</span>`)}</span>`
+                : ''}
               <span class="index__count">${t.catalog.count(cat.product_count)}</span>
               <span class="index__go">${icon('arrow-up-right')}</span>
-              <span class="index__thumb art" aria-hidden="true">
-                ${cat.image ? picture(cat.image, { sizes: '260px' }) : artSvg(cat.art)}
+              <span class="index__thumb art${cover ? ` has-${mediaKind(cover)}` : ''}" aria-hidden="true">
+                ${cover ? picture(cover, { sizes: '260px' }) : artSvg(cat.art)}
               </span>
             </a>
           </li>`;
@@ -162,15 +201,27 @@ function spotlight(ctx, product, number) {
   const tone = toneFor(product.brand, product.id);
   const dest = resolveDestination(product, ctx.settings);
   const features = parseFeatures(ctx.tr(product, 'features')).slice(0, 4);
-  const [cover] = product.images;
+  const [cover, second] = product.images;
+  const kind = mediaKind(cover);
+  let media;
+  if (kind === 'cutout') {
+    // Fonsiz rasm: tovar kartochka foni ustida turadi va sichqonchaga qarab 3D og'adi
+    media = html`<span class="spotlight__frame spotlight__frame--cutout" data-tilt3d>${picture(cover, { alt: name, sizes: '(min-width: 1024px) 44vw, 88vw' })}</span>${badges(ctx, product)}`;
+  } else if (kind === 'photo') {
+    // Oddiy surat: muqova 3D ramkada, ortidan ikkinchi rasm ko'rinib turadi
+    media = html`${second ? html`<span class="spotlight__back" aria-hidden="true">${picture(second, { sizes: '(min-width: 1024px) 30vw, 60vw' })}</span>` : ''}
+        <span class="spotlight__frame" data-tilt3d>${picture(cover, { alt: name, sizes: '(min-width: 1024px) 40vw, 80vw' })}</span>`;
+  } else {
+    media = html`<div class="spotlight__art">${artSvg(artKeyOf(product))}</div>${badges(ctx, product)}`;
+  }
   return html`<section class="section spotlight" id="tanlov" data-product="${product.id}" style="${toneStyle(tone)}">
     <div class="wrap spotlight__grid">
-      <a class="spotlight__media art${cover ? ' has-photo' : ''}" href="${productUrl(product)}" data-reveal="scale" data-card-link data-vt-media aria-label="${name}">
-        ${cover ? picture(cover, { alt: name, sizes: '(min-width: 1024px) 46vw, 92vw' }) : html`<div class="spotlight__art">${artSvg(artKeyOf(product))}</div>`}
-        ${badges(ctx, product)}
+      <a class="spotlight__media art${kind ? ` has-${kind}` : ''}" href="${productUrl(product)}" data-reveal="scale" data-card-link data-vt-media aria-label="${name}">
+        ${media}
       </a>
       <div class="spotlight__body">
         ${kicker(t.home.spotlightKicker, number)}
+        ${kind === 'photo' ? badges(ctx, product, { inline: true }) : ''}
         <h2 class="spotlight__title split" data-reveal="split">${splitWords(name)}</h2>
         ${product.tagline ? html`<p class="spotlight__tagline" data-reveal>${ctx.tr(product, 'tagline')}</p>` : ''}
         ${features.length
@@ -238,7 +289,7 @@ function otherBrandBand(ctx) {
           ${teasers.map((product, i) => {
             const tone = toneFor(product.brand, product.id);
             const [cover] = product.images;
-            return html`<div class="band__card art${cover ? ' has-photo' : ''}" style="${toneStyle(tone)};--n:${i}" data-reveal="scale">
+            return html`<div class="band__card art${cover ? ` has-${mediaKind(cover)}` : ''}" style="${toneStyle(tone)};--n:${i}" data-reveal="scale">
               ${cover ? picture(cover, { sizes: '280px' }) : artSvg(artKeyOf(product))}
             </div>`;
           })}
@@ -283,7 +334,7 @@ export function homePage(ctx) {
   if (products.length) {
     const freshList = fresh.slice(0, 12);
     sections.push(carousel(ctx, { id: 'yangi', label: t.home.newKicker, number: ++n, title: t.home.newTitle, products: freshList, moreHref: brand.catalog, eager: true }));
-    if (ctx.categories.length) sections.push(categoryIndex(ctx, ++n));
+    if (ctx.categories.length) sections.push(categoryIndex(ctx, ++n, products));
     if (featured) sections.push(spotlight(ctx, featured, ++n));
     if (hits.length >= 2) {
       sections.push(carousel(ctx, { id: 'xit', label: t.home.hitKicker, number: ++n, title: t.home.hitTitle, products: hits.slice(0, 12), moreHref: brand.catalog }));

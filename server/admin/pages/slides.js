@@ -2,6 +2,7 @@
 import { html, raw, attrs, jsonScript } from '../../lib/html.js';
 import { listSlides, listCategories, listProducts } from '../../db/repo.js';
 import { artSvg, toneFor, toneStyle, TONES } from '../../site/art.js';
+import { slidePhotos } from '../../site/slide-photos.js';
 import { LIMITS } from '../validate.js';
 import { ic } from '../icons.js';
 import { shell } from '../layout.js';
@@ -22,18 +23,22 @@ function targetLabel(slide, categories, products) {
   return 'Katalog';
 }
 
-function row(slide, categories, products) {
+function row(slide, categories, products, visibleProducts) {
   const tone = toneFor(slide.brand, slide.id, slide.tone);
+  // Rasm yuklanmagan slayd saytda bog'langan tovar yoki kategoriya rasmlarini ko'rsatadi
+  const linked = slide.image ? null : slidePhotos(slide, visibleProducts.filter((item) => item.brand === slide.brand), 1)[0] || null;
+  const photo = slide.image || linked;
   return html`<li${attrs({ class: `srow${slide.visible ? '' : ' is-hidden'}`, 'data-id': slide.id, 'data-name': slide.title })}>
     <button class="prow__grip" type="button" data-grip aria-label="Tartibini o‘zgartirish: ${slide.title}. Yuqoriga va pastga strelkalar bilan suring.">${ic('grip')}</button>
-    <span class="pthumb pthumb--wide art${slide.image ? ' has-photo' : ''}" style="${toneStyle(tone)}">${slide.image
-      ? html`<img src="${slide.image.thumb_url}" alt="" loading="lazy" width="${slide.image.width}" height="${slide.image.height}">`
+    <span class="pthumb pthumb--wide art${photo ? (photo.cutout ? ' has-cutout' : ' has-photo') : ''}" style="${toneStyle(tone)}">${photo
+      ? html`<img${photo.cutout ? raw(' class="is-cutout"') : ''} src="${photo.thumb_url}" alt="" loading="lazy" width="${photo.width}" height="${photo.height}">`
       : artSvg(slide.art)}</span>
     <div class="crow__main">
       <button class="crow__name" type="button" data-edit>${slide.title}</button>
       <p class="prow__meta">
         ${slide.kicker ? html`<span>${slide.kicker}</span>` : ''}
         <span>${targetLabel(slide, categories, products)}</span>
+        <span>${slide.image ? 'Rasm: butun ekran' : linked ? 'Rasm: tovar rasmlari (3D)' : 'Rasm yo‘q: chizma'}</span>
         ${slide.is_demo ? html`<span class="tag">demo</span>` : ''}
       </p>
     </div>
@@ -49,6 +54,17 @@ export function slidesPage(c) {
   const slides = listSlides({});
   const categories = listCategories({});
   const products = listProducts({});
+  // Saytda ko'rinadigan tovarlar: rasm yuklanmagan slayd shularning rasmlarini oladi.
+  // covers — oynadagi jonli ko'rinish uchun: tovar, kategoriya va bo'lim bo'yicha birinchi muqova.
+  const visibleProducts = listProducts({ visibleOnly: true });
+  const covers = { product: {}, category: {}, brand: {} };
+  for (const item of visibleProducts) {
+    const cover = item.images[0];
+    if (!cover) continue;
+    covers.product[item.id] = cover.thumb_url;
+    if (item.category_id) covers.category[item.category_id] ??= cover.thumb_url;
+    covers.brand[item.brand] ??= cover.thumb_url;
+  }
 
   const categoryOptions = [
     { value: '', label: 'Kategoriyani tanlang' },
@@ -66,7 +82,7 @@ export function slidesPage(c) {
   ];
 
   const body = html`
-    <p class="lead">Slaydlar bosh sahifaning eng tepasida navbat bilan almashadi. Rasm yuklansa, u butun ekranni egallaydi. Rasm bo‘lmasa, tanlangan chizma ko‘rsatiladi.</p>
+    <p class="lead">Slaydlar bosh sahifaning eng tepasida navbat bilan almashadi. Rasm yuklansa, u butun ekranni egallaydi. Yuklanmasa, slayd bog‘langan tovar yoki kategoriyaning rasmlari 3D to‘plam bo‘lib chiqadi; ularda ham rasm bo‘lmasa — tanlangan chizma.</p>
 
     ${BRAND_KEYS.map((brand) => {
       const list = slides.filter((slide) => slide.brand === brand);
@@ -77,7 +93,7 @@ export function slidesPage(c) {
           <button class="btn btn--ghost btn--sm" type="button" data-new="${brand}">${ic('plus')}Slayd qo‘shish</button>
         </header>
         <div class="rows">
-          <ul class="rows__list" role="list" data-sortable="${brand}">${list.map((slide) => row(slide, categories, products))}</ul>
+          <ul class="rows__list" role="list" data-sortable="${brand}">${list.map((slide) => row(slide, categories, products, visibleProducts))}</ul>
           ${list.length ? '' : html`<p class="rows__empty">Slayd yo‘q. Bosh sahifada brend nomi yozilgan oddiy blok ko‘rinadi.</p>`}
         </div>
       </section>`;
@@ -115,9 +131,10 @@ export function slidesPage(c) {
             <div class="field" data-field="image_id">
               <span class="field__label">Rasm (ixtiyoriy)</span>
               ${uploader({ id: 'slide-image', note: 'Gorizontal rasm, kamida 1920 px eni.' })}
+              <p class="field__hint">Yuklangan rasm butun ekranga fon bo‘ladi. Yuklamasangiz, tepada tanlangan tovar yoki kategoriyaning rasmlari 3D to‘plam bo‘lib chiqadi.</p>
               <p class="field__error" data-error hidden></p>
             </div>
-            ${glyphPicker({ name: 'art', value: 'box', label: 'Chizma (rasm bo‘lmasa)' })}
+            ${glyphPicker({ name: 'art', value: 'box', label: 'Chizma (hech qanday rasm bo‘lmasa)' })}
             ${tonePicker({ name: 'tone', value: '', label: 'Chizma rangi' })}
             <div class="switches">
               ${switchRow({ name: 'visible', checked: true, label: 'Saytda ko‘rinadi' })}
@@ -150,6 +167,7 @@ export function slidesPage(c) {
         link_type: slide.link_type, link_value: slide.link_value, art: slide.art, tone: slide.tone, visible: slide.visible, image: slide.image,
       })),
       tones: TONES,
+      covers,
     })}</script>`;
 
   return shell(c, {

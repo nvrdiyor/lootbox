@@ -40,37 +40,54 @@ function jpegSize(buf) {
   return null;
 }
 
+// alpha — rasmda shaffoflik kanali bormi (fonsiz, kesib olingan tovar rasmi shunday bo'ladi)
 function webpSize(buf) {
   if (buf.length < 30) return null;
   const chunk = buf.toString('latin1', 12, 16);
   if (chunk === 'VP8 ') {
     if (buf[23] !== 0x9d || buf[24] !== 0x01 || buf[25] !== 0x2a) return null;
-    return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
+    return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff, alpha: false };
   }
   if (chunk === 'VP8L') {
     if (buf[20] !== 0x2f) return null;
     const bits = buf.readUInt32LE(21);
-    return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+    return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1, alpha: ((bits >>> 28) & 1) === 1 };
   }
   if (chunk === 'VP8X') {
-    return { width: buf.readUIntLE(24, 3) + 1, height: buf.readUIntLE(27, 3) + 1 };
+    return { width: buf.readUIntLE(24, 3) + 1, height: buf.readUIntLE(27, 3) + 1, alpha: (buf[20] & 0x10) !== 0 };
   }
   return null;
 }
 
+/** PNG: rang turi 4 yoki 6 — alfa kanalli; palitrali (3) rasmda tRNS bo'lagi bo'lsa ham shaffoflik bor */
+function pngAlpha(buf) {
+  const colorType = buf[25];
+  if (colorType === 4 || colorType === 6) return true;
+  if (colorType !== 3) return false;
+  let off = 8;
+  while (off + 12 <= buf.length) {
+    const length = buf.readUInt32BE(off);
+    const type = buf.toString('latin1', off + 4, off + 8);
+    if (type === 'tRNS') return true;
+    if (type === 'IDAT' || type === 'IEND') return false;
+    off += 12 + length;
+  }
+  return false;
+}
+
 /**
  * Fayl haqiqatan rasm ekanini va turini baytlardan aniqlaydi.
- * @returns {{ mime: string, ext: string, width: number, height: number } | null}
+ * @returns {{ mime: string, ext: string, width: number, height: number, alpha: boolean } | null}
  */
 export function sniffImage(buf) {
   if (!buf || buf.length < 24) return null;
   let found = null;
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
     const size = jpegSize(buf);
-    found = size && { mime: 'image/jpeg', ext: 'jpg', ...size };
+    found = size && { mime: 'image/jpeg', ext: 'jpg', ...size, alpha: false };
   } else if (buf.readUInt32BE(0) === 0x89504e47 && buf.readUInt32BE(4) === 0x0d0a1a0a) {
-    if (buf.toString('latin1', 12, 16) === 'IHDR') {
-      found = { mime: 'image/png', ext: 'png', width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+    if (buf.toString('latin1', 12, 16) === 'IHDR' && buf.length > 26) {
+      found = { mime: 'image/png', ext: 'png', width: buf.readUInt32BE(16), height: buf.readUInt32BE(20), alpha: pngAlpha(buf) };
     }
   } else if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') {
     const size = webpSize(buf);
@@ -90,7 +107,8 @@ export const mediaPath = (name) => path.join(config.uploadsDir, name);
 /**
  * Rasmni tekshirib diskka yozadi.
  * @param {{ full: Buffer, thumb?: Buffer|null, color?: string }} input
- * @returns {{ file, thumb, mime, width, height, bytes, color }}
+ * @returns {{ file, thumb, thumb_width, mime, width, height, bytes, color, cutout }}
+ *   cutout — rasm fonsiz (shaffof joylari bor): sayt uni kartochka foni ustida, kesmasdan ko'rsatadi
  */
 export function storeImage({ full, thumb = null, color = '' }) {
   if (!full || !full.length) throw new ImageError('Fayl bo‘sh.');
@@ -120,11 +138,14 @@ export function storeImage({ full, thumb = null, color = '' }) {
   return {
     file,
     thumb: thumbFile,
+    // Kichik nusxa yozilmagan bo'lsa, uning o'rnida to'liq rasm turadi
+    thumb_width: thumbFile === file ? info.width : thumbInfo.width,
     mime: info.mime,
     width: info.width,
     height: info.height,
     bytes: full.length,
     color: /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : '',
+    cutout: info.alpha ? 1 : 0,
   };
 }
 

@@ -157,8 +157,9 @@ export function uploader({ id, multiple = false, max = 1, note = '', title = '' 
 export function productThumb(product, className = 'pthumb') {
   const tone = toneFor(product.brand, product.id);
   const cover = product.images[0];
-  return html`<span class="${className} art${cover ? ' has-photo' : ''}" style="${toneStyle(tone)}">${cover
-    ? html`<img src="${cover.thumb_url}" alt="" loading="lazy" decoding="async" width="${cover.width}" height="${cover.height}">`
+  // Fonsiz rasm (tovarning o'zi) kesilmasdan, kartochka foni ustida ko'rsatiladi
+  return html`<span class="${className} art${cover ? (cover.cutout ? ' has-cutout' : ' has-photo') : ''}" style="${toneStyle(tone)}">${cover
+    ? html`<img${cover.cutout ? raw(' class="is-cutout"') : ''} src="${cover.thumb_url}" alt="" loading="lazy" decoding="async" width="${cover.width}" height="${cover.height}">`
     : artSvg(product.art || product.category?.art || 'box')}</span>`;
 }
 

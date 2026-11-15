@@ -12,6 +12,7 @@ if (dialog && form) {
   const data = pageData();
   const byId = new Map((data.slides || []).map((slide) => [slide.id, slide]));
   const tones = data.tones || { lootbox: [], fit: [] };
+  const covers = { product: {}, category: {}, brand: {}, ...(data.covers || {}) };
   const saveButton = $('[data-save]', form);
   const title = $('[data-dialog-title]', dialog);
   const linkError = $('[data-link-error]', form);
@@ -33,6 +34,15 @@ if (dialog && form) {
     return list[Math.abs(seed - 1) % Math.max(1, list.length)] || null;
   }
 
+  // Rasm yuklanmagan slayd saytda bog'langan tovar yoki kategoriya rasmlarini ko'rsatadi
+  // (qoida server/site/slide-photos.js dagi bilan bir xil); bu yerda birinchi muqovasi chiqadi.
+  function linkedCover(brand) {
+    const type = radioValue(form, 'link_type');
+    if (type === 'category') return covers.category[form.elements.link_category.value] || '';
+    if (type === 'product' && covers.product[form.elements.link_product.value]) return covers.product[form.elements.link_product.value];
+    return covers.brand[brand] || '';
+  }
+
   function paint() {
     const brand = radioValue(form, 'brand');
     preview.dataset.brand = brand;
@@ -42,9 +52,10 @@ if (dialog && form) {
     $('[data-preview-cta]', form).textContent = form.elements.cta_label.value.trim() || 'Ko‘rish';
 
     const photo = $('.thumb:not(.is-error) img', uploader.element);
-    if (photo && photo.getAttribute('src')) {
+    const source = photo && photo.getAttribute('src') ? photo.src : linkedCover(brand);
+    if (source) {
       const img = document.createElement('img');
-      img.src = photo.src;
+      img.src = source;
       img.alt = '';
       previewMedia.replaceChildren(img);
       previewMedia.classList.add('has-photo');

@@ -643,6 +643,9 @@ legend.field__label { margin-bottom: 7px; }
   overflow: hidden;
 }
 .pthumb img { width: 100%; height: 100%; object-fit: cover; }
+/* Fonsiz rasm (tovarning o'zi): kesilmaydi */
+.pthumb img.is-cutout { object-fit: contain; padding: 8%; }
+.preview__media img[src*='/media/'] { object-fit: contain; }
 .pthumb .art__svg { width: 74%; stroke-width: 7; }
 .pthumb--square { aspect-ratio: 1; }
 .pthumb--wide { width: 92px; aspect-ratio: 16 / 10; }

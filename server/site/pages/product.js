@@ -8,7 +8,7 @@ import { artSvg, toneFor, toneStyle } from '../art.js';
 import { icon, destIcon } from '../icons.js';
 import { categoryUrl, productUrl } from '../context.js';
 import { page } from '../layout.js';
-import { picture, price, badges, carousel, destButton, artKeyOf } from '../components.js';
+import { picture, price, badges, carousel, destButton, artKeyOf, mediaKind } from '../components.js';
 
 const OTHER_LABEL = { uzum: 'otherUzum', channel: 'otherChannel', dm: 'otherDm' };
 
@@ -25,12 +25,14 @@ function gallery(ctx, product, name, tone) {
   }
   return html`<div class="gallery${images.length === 1 ? ' gallery--single' : ''}" data-gallery aria-label="${t.product.gallery}">
       ${images.map((image, i) => {
-        // 3:4 dan ancha farq qiladigan rasm kesilmaydi — to'liq ko'rsatiladi
+        // Fonsiz rasm (tovarning o'zi) kartochka foni ustida turadi; 3:4 dan ancha farq qiladigan surat
+        // kesilmaydi — to'liq ko'rsatiladi
         const whole = Math.abs(image.width / image.height - 0.75) > 0.06;
-        return html`<button class="gallery__item art has-photo" type="button" data-zoom="${image.url}"${i === 0 ? raw(' id="product-stage" data-stage') : ''}
-          ${image.color ? raw(`style="background-color:${image.color}"`) : ''}
+        const style = image.cutout ? toneStyle(tone) : image.color ? `background-color:${image.color}` : '';
+        return html`<button class="gallery__item art has-${mediaKind(image)}" type="button" data-zoom="${image.url}"${i === 0 ? raw(' id="product-stage" data-stage') : ''}
+          ${style ? raw(`style="${style}"`) : ''}
           aria-label="${t.product.zoom}: ${t.product.photo(i + 1, images.length)}">
-          ${picture(image, { alt: i === 0 ? name : `${name} — ${i + 1}`, sizes: '(min-width: 1024px) 30vw, 92vw', eager: i < 2, className: whole ? 'is-whole' : '' })}
+          ${picture(image, { alt: i === 0 ? name : `${name} — ${i + 1}`, sizes: '(min-width: 1024px) 30vw, 92vw', eager: i < 2, className: image.cutout ? 'is-cutout' : whole ? 'is-whole' : '' })}
         </button>`;
       })}
     </div>

@@ -61,7 +61,8 @@ export async function run({ request, ok, eq, repo, PNG, ORIGIN, password }) {
   eq((await api('/admin/api/demo/clear', 'POST', {}, { 'X-CSRF-Token': '' })).status, 403, 'CSRF: tokensiz so‘rov rad etiladi');
   eq((await api('/admin/api/demo/clear', 'POST', {}, { 'X-CSRF-Token': 'x'.repeat(csrf.length) })).status, 403, 'CSRF: noto‘g‘ri token rad etiladi');
   eq((await api('/admin/api/demo/clear', 'POST', {}, { Origin: 'https://evil.example' })).status, 403, 'CSRF: boshqa saytdan kelgan so‘rov rad etiladi');
-  eq(repo.demoCounts().products, 20, 'CSRF: rad etilgan so‘rov hech narsani o‘zgartirmagan');
+  const demoBefore = repo.listProducts({ brand: 'fit' }).length;
+  ok(demoBefore > 0 && repo.demoCounts().products === demoBefore, 'CSRF: rad etilgan so‘rov hech narsani o‘zgartirmagan');
 
   // ---- Rasm yuklash -------------------------------------------------------------
   const upload = (file) => {
@@ -79,6 +80,7 @@ export async function run({ request, ok, eq, repo, PNG, ORIGIN, password }) {
   eq(uploaded.status, 201, 'rasm yuklash: PNG qabul qilinadi');
   const image = (await uploaded.json()).image;
   ok(image && image.id > 0 && image.url.startsWith('/media/') && !image.url.includes('rasm'), 'rasm yuklash: fayl tasodifiy nom bilan saqlanadi');
+  eq(image.thumb_width, 2, 'rasm yuklash: kichik nusxaning haqiqiy eni qaytadi');
 
   // ---- Tovar yaratish → saytda ko'rinishi ------------------------------------------
   const category = repo.listCategories({ brand: 'lootbox' })[0];
@@ -106,6 +108,16 @@ export async function run({ request, ok, eq, repo, PNG, ORIGIN, password }) {
   ok(page.includes(image.url), 'sayt: yuklangan rasm tovar sahifasida');
   ok(page.includes('Tekshiruv tovari &lt;b&gt;qalin&lt;/b&gt;') && !page.includes('<script>alert(1)</script>'), 'sayt: admin kiritgan matn xavfsiz ko‘rsatiladi (XSS yo‘q)');
   ok((await (await request('/')).text()).includes(`/tovar/${product.slug}`), 'sayt: yangi tovar bosh sahifada (Yangi kelganlar)');
+  // Rasm yuklanmagan slayd bog'langan kategoriyadagi tovar rasmini oladi — admin ro'yxatida ham shunday ko'rinadi
+  const slidesAdmin = await (await request('/admin/slides', { headers: { Cookie: cookie } })).text();
+  ok(
+    slidesAdmin.includes('Rasm: tovar rasmlari (3D)') && new RegExp(`<img[^>]* src="${image.thumb_url.replaceAll('.', '[.]')}"`).test(slidesAdmin),
+    'admin: slaydlar ro‘yxatida bog‘langan tovar rasmi ko‘rinadi',
+  );
+  ok(image.cutout === true && slidesAdmin.includes('class="is-cutout"'), 'admin: fonsiz rasm ro‘yxatda kesilmasdan ko‘rsatiladi');
+  // Fayl nomi ikki joyda: ro'yxatdagi rasmda va oynadagi jonli ko'rinish uchun uzatilgan muqovalarda
+  const thumbName = image.thumb_url.split('/').pop();
+  ok(slidesAdmin.includes('"covers":') && slidesAdmin.split(thumbName).length - 1 >= 2, 'admin: slayd oynasidagi ko‘rinish uchun muqovalar uzatiladi');
 
   // Yo'nalishni Telegram kanal / lichkaga almashtirish
   const before = { ...repo.getSettings() };

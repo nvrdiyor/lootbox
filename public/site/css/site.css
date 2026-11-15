@@ -663,6 +663,131 @@ body:not(.has-overlay-header) .header::before,
 .hero__chip--a { top: 12%; left: 0; translate: calc(var(--mx, 0) * -22px) calc(var(--my, 0) * -22px); }
 .hero__chip--b { bottom: 12%; right: 0; color: var(--accent-text); translate: calc(var(--mx, 0) * 28px) calc(var(--my, 0) * 28px); }
 
+/* 3D rasm to'plami. Slaydga rasm yuklanmagan bo'lsa, bog'langan tovar yoki kategoriyaning
+   rasmlari uchta kartochka bo'lib turadi: oldinda muqova, ortida yana ikkitasi. Kartochkaning
+   o'rni data-pos da (0 — oldinda); hero.js uni vaqti-vaqti bilan almashtirib turadi. */
+.hero__slide--deck .hero__media { container-type: size; }
+.deck {
+  /* Kartochka eni: ajratilgan joyning eniga ham, bo'yiga ham sig'adigan eng katta o'lcham */
+  --card-w: min(56cqw, 66cqh, 460px);
+  position: relative;
+  width: calc(var(--card-w) * 1.76);
+  height: calc(var(--card-w) * 1.5);
+}
+.deck__glow {
+  position: absolute;
+  inset: 4% 6%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--tone) 40%, transparent), transparent 78%);
+  filter: blur(28px);
+  opacity: 0;
+  translate: calc(var(--mx, 0) * -18px) calc(var(--my, 0) * -14px);
+  transition: opacity 1.2s .15s, translate .6s ease-out;
+}
+.hero__slide.is-active .deck__glow { opacity: 1; }
+.deck__cards { position: absolute; inset: 0; display: block; }
+.deck__card {
+  --dur: 1.15s;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--card-w);
+  aspect-ratio: 3 / 4;
+  margin: calc(var(--card-w) * -2 / 3) 0 0 calc(var(--card-w) / -2);
+  /* Avval butun to'plam sichqonchaga qarab buriladi, keyin kartochka o'z joyiga suriladi */
+  transform:
+    perspective(1500px)
+    rotateX(calc(var(--my, 0) * -5deg)) rotateY(calc(var(--mx, 0) * 8deg))
+    translate3d(var(--x), var(--y), var(--z)) rotateY(var(--tilt)) rotateZ(var(--roll)) scale(var(--s, 1));
+  /* z-index o'rtada almashadi: shu payt orqaga ketayotgan kartochka yon tomonga chiqib turgan bo'ladi */
+  transition: transform var(--dur) var(--ease), opacity .5s, z-index 0s .42s;
+}
+.deck__card[data-pos='0'] { --x: 0%; --y: 0%; --z: 70px; --tilt: -12deg; --roll: -2.5deg; --dur: 1.25s; z-index: 3; }
+.deck__card[data-pos='1'] { --x: 44%; --y: -4%; --z: -90px; --tilt: -21deg; --roll: 6deg; --dur: 1.1s; z-index: 2; }
+.deck__card[data-pos='2'] { --x: -44%; --y: 5%; --z: -180px; --tilt: -3deg; --roll: -9deg; --dur: 1s; z-index: 1; }
+.deck[data-count='1'] .deck__card { --tilt: -9deg; }
+.deck[data-count='2'] .deck__cards { translate: -10% 0; }
+.deck__face {
+  position: absolute;
+  inset: 0;
+  border-radius: clamp(10px, calc(var(--card-w) * .05), 22px);
+  overflow: hidden;
+  /* Safari: 3D harakat paytida rasm yumaloq burchakdan chiqib ketmasin */
+  isolation: isolate;
+  background: var(--bg-2);
+  box-shadow: 0 36px 70px -30px var(--shadow), 0 0 0 1px var(--line);
+  transition: filter .9s;
+}
+.deck__face img { width: 100%; height: 100%; object-fit: cover; }
+.deck__card[data-pos='1'] .deck__face { filter: brightness(.6) saturate(.9); }
+.deck__card[data-pos='2'] .deck__face { filter: brightness(.42) saturate(.85); }
+/* Sichqonchaga ergashadigan yorug'lik dog'i */
+.deck__face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(70% 55% at calc(50% + var(--mx, 0) * 40%) calc(36% + var(--my, 0) * 40%), rgb(255 255 255 / .17), transparent 70%);
+  mix-blend-mode: screen;
+}
+/* Oldinga chiqqan kartochka ustidan bir marta o'tadigan yaltirash */
+.deck__face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgb(255 255 255 / .24) 50%, transparent 60%) no-repeat;
+  background-size: 250% 100%;
+  background-position: 160% 0;
+}
+.hero__slide.is-active .deck__face { animation: deck-float 6.4s ease-in-out infinite; animation-delay: calc(var(--i) * -2.1s); }
+.hero__slide.is-active .deck__card[data-pos='0'] .deck__face::after { animation: deck-shine 1.4s .6s var(--ease) both; }
+.deck__card.is-tucking { animation: deck-tuck 1s var(--ease-io); }
+.deck[data-count='2'] .deck__card.is-tucking { animation-name: deck-tuck-right; }
+.deck .hero__chip { z-index: 5; opacity: 0; scale: .8; transition: opacity .5s, scale .7s var(--ease), translate .5s ease-out; }
+.hero__slide.is-active .deck .hero__chip { opacity: 1; scale: 1; transition-delay: .85s, .85s, 0s; }
+
+/* Fonsiz rasmlar (tovarning o'zi kesib olingan): ramkasiz, havoda turgandek. Oldinda asosiy tovar,
+   ortida — kichikroq va xiraroq — yana ikkitasi; soya va yorug'lik rasm shakliga qarab tushadi. */
+.deck--cutout {
+  --card-w: min(72cqw, 84cqh, 660px);
+  width: calc(var(--card-w) * 1.38);
+  height: calc(var(--card-w) * 1.16);
+}
+.deck__card--cutout { aspect-ratio: 1; margin-top: calc(var(--card-w) / -2); }
+.deck__card--cutout .deck__face {
+  overflow: visible;
+  isolation: auto;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.deck__card--cutout .deck__face::before,
+.deck__card--cutout .deck__face::after { content: none; }
+.deck__card--cutout img {
+  object-fit: contain;
+  filter:
+    drop-shadow(0 34px 34px var(--shadow))
+    drop-shadow(0 0 44px color-mix(in oklab, var(--tone) 24%, transparent));
+}
+.deck--cutout .deck__card[data-pos='0'] { --x: 0%; --y: 0%; --z: 80px; --tilt: -10deg; --roll: -3deg; --s: 1; }
+.deck--cutout .deck__card[data-pos='1'] { --x: 40%; --y: -30%; --z: -200px; --tilt: -24deg; --roll: 13deg; --s: .56; }
+.deck--cutout .deck__card[data-pos='2'] { --x: -41%; --y: 30%; --z: -320px; --tilt: 8deg; --roll: -17deg; --s: .46; }
+.deck--cutout .deck__card[data-pos='1'] .deck__face { filter: brightness(.74) blur(1.2px); }
+.deck--cutout .deck__card[data-pos='2'] .deck__face { filter: brightness(.56) blur(2.4px); }
+.deck--cutout[data-count='2'] .deck__cards { translate: -6% 4%; }
+
+/* Faol bo'lmagan slaydda kartochkalar o'ng tomonda, ko'rinmas holda yig'ilib turadi —
+   slayd ochilganda shu yerdan "tarqatiladi", yopilganda chap tomonga uchib ketadi */
+.hero__slide:not(.is-active) .deck__card { --x: 74%; --y: 16%; --z: -460px; --tilt: -62deg; --roll: 14deg; opacity: 0; }
+.hero__slide.is-leaving .deck__card {
+  --x: -88%; --y: -8%; --z: -320px; --tilt: 44deg; --roll: -16deg; --dur: .7s;
+  opacity: 0;
+  transition-timing-function: var(--ease-io);
+}
+
 /* Slayd almashganda matn va chizma harakati */
 .hero__kicker,
 .hero__sub,
@@ -693,6 +818,9 @@ body:not(.has-overlay-header) .header::before,
 .js .hero:not(.is-ready) .hero__actions { opacity: 0; transform: translateY(18px); }
 .js .hero:not(.is-ready) .split .w > span { transform: translateY(110%); }
 .js .hero:not(.is-ready) .hero__art { opacity: 0; transform: scale(.84) rotate(-9deg); }
+.js .hero:not(.is-ready) .deck__card { --x: 74%; --y: 16%; --z: -460px; --tilt: -62deg; --roll: 14deg; opacity: 0; }
+.js .hero:not(.is-ready) .deck__glow,
+.js .hero:not(.is-ready) .deck .hero__chip { opacity: 0; }
 .js .hero:not(.is-ready) .hero__photo img { opacity: 0; transform: scale(1.1); }
 .js .hero:not(.is-ready) .hero__dot.is-active .hero__bar i { animation: none; }
 .js .hero:not(.is-ready) .hero__nav { opacity: 0; }
@@ -754,6 +882,10 @@ body:not(.has-overlay-header) .header::before,
   .hero__title { font-size: clamp(3rem, 6.3vw, 6.6rem); }
   .hero__arrows { display: flex; }
 }
+@media (max-width: 1023px) {
+  /* Telefonda rasm to'plamiga matn ustidan yetarli joy qoladi */
+  .hero__slide--deck { grid-template-rows: minmax(clamp(250px, 37svh, 380px), 1fr) auto; }
+}
 @media (min-width: 1024px) {
   .hero__slide {
     grid-template-rows: none;
@@ -764,6 +896,9 @@ body:not(.has-overlay-header) .header::before,
   .hero__content { order: -1; padding: 0 0 0 max(var(--gutter), calc((100vw - var(--max)) / 2)); }
   .hero__media { height: 100%; padding: 0 max(var(--gutter), calc((100vw - var(--max)) / 2)) 0 0; }
   .hero__art { width: min(100%, 66svh, 640px); }
+  .hero__slide--deck { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  /* Matn ustuni torroq: 12 harfli so'z ham ("SIRPANMAYDI.") o'rtasidan bo'linmasdan sig'sin */
+  .hero__slide--deck .hero__title { font-size: clamp(2.6rem, 5.3vw, 5.6rem); }
   .hero__slide--photo { grid-template-columns: minmax(0, 1fr); align-items: end; }
   .hero__slide--photo .hero__content { order: 0; padding-bottom: 12px; max-width: 980px; }
 }
@@ -826,7 +961,9 @@ body:not(.has-overlay-header) .header::before,
   display: flex;
   gap: clamp(10px, 1.3vw, 22px);
   margin: 0;
-  padding: 4px max(var(--gutter), calc((100% - var(--max)) / 2)) 8px;
+  /* Tepada va pastda zaxira joy: og'gan (3D) kartochkaning burchagi kesilib qolmasin */
+  padding: 16px max(var(--gutter), calc((100% - var(--max)) / 2)) 18px;
+  margin-block: -12px -10px;
   list-style: none;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -915,6 +1052,51 @@ body:not(.has-overlay-header) .header::before,
   .card:hover .card__art .art__svg { transform: scale(1.1) rotate(-4deg); }
 }
 
+/* Fonsiz rasm (tovarning o'zi kesib olingan): kesilmaydi, kartochkaning o'z foni ustida turadi */
+.card__img--cutout {
+  object-fit: contain;
+  /* tepada belgilar (Yangi, chegirma), pastda tovar kodi turadi: bo'yi baland rasm ularning ustiga chiqmasin */
+  padding: max(15%, 42px) 9% 11%;
+  filter: drop-shadow(0 16px 18px var(--shadow));
+}
+@media (hover: hover) {
+  .card:hover .card__img--cutout { transform: scale(1.08) rotate(-2.5deg); }
+}
+
+/* Rasmli kartochka sichqonchaga qarab 3D og'adi (--tx / --ty ni tilt.js qo'yadi: -1 … 1, kartochka
+   markazidan chetigacha). Oddiy surat ustida yorug'lik dog'i yuradi; fonsiz tovar esa fonidan
+   biroz "ajralib" siljiydi. */
+@media (hover: hover) and (pointer: fine) {
+  [data-tilt3d] {
+    transform: perspective(900px) rotateX(calc(var(--ty, 0) * -6deg)) rotateY(calc(var(--tx, 0) * 7deg));
+    transition: transform .7s var(--ease), box-shadow .5s;
+  }
+  [data-tilt3d].is-tilting {
+    transition-duration: .14s, .5s;
+    box-shadow: 0 26px 50px -24px var(--shadow);
+  }
+  .has-cutout[data-tilt3d] .card__img--cutout,
+  .spotlight__frame--cutout[data-tilt3d] img {
+    translate: calc(var(--tx, 0) * 9px) calc(var(--ty, 0) * 9px);
+    transition: transform 1.2s var(--ease), opacity .5s, translate .35s ease-out;
+  }
+  .spotlight__frame--cutout[data-tilt3d].is-tilting { box-shadow: none; }
+  .has-photo[data-tilt3d]::after,
+  .spotlight__frame:not(.spotlight__frame--cutout)[data-tilt3d]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(60% 50% at calc(50% + var(--tx, 0) * 46%) calc(50% + var(--ty, 0) * 46%), rgb(255 255 255 / .22), transparent 72%);
+    mix-blend-mode: screen;
+    opacity: 0;
+    transition: opacity .45s;
+  }
+  .has-photo[data-tilt3d].is-tilting::after,
+  .spotlight__frame:not(.spotlight__frame--cutout)[data-tilt3d].is-tilting::after { opacity: 1; }
+}
+
 .badges {
   position: absolute;
   top: 12px;
@@ -937,6 +1119,11 @@ body:not(.has-overlay-header) .header::before,
 .badge--new { background: var(--accent); color: var(--accent-ink); }
 .badge--hit { background: var(--bg-inv); color: var(--bg); }
 .badge--sale { background: var(--sale); color: var(--sale-ink); }
+/* Rasmli tovarda belgilar rasm ustida emas, matn qatorida turadi (rasmdagi yozuvni yopmaydi) */
+.badges--inline { position: static; }
+.card__body .badges { margin-bottom: 3px; }
+.card__body .badge { height: 22px; padding: 0 8px; font-size: .6rem; }
+.spotlight__body .badges { margin-bottom: clamp(12px, 1.4vw, 20px); }
 
 .card__code {
   position: absolute;
@@ -1042,12 +1229,39 @@ body:not(.has-overlay-header) .header::before,
 }
 .index__go .icon { width: 20px; height: 20px; }
 .index__thumb { display: none; }
+/* Kategoriyadagi tovarlar muqovalaridan kichik to'plam (qator ustiga kelganda yelpig'ichdek ochiladi) */
+.index__row.has-stack { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.index__stack { display: flex; align-items: center; padding-left: clamp(14px, 1.6vw, 26px); }
+.index__mini {
+  position: relative;
+  z-index: calc(3 - var(--k));
+  width: clamp(34px, 4.6vw, 66px);
+  aspect-ratio: 3 / 4;
+  margin-left: clamp(-26px, -1.6vw, -14px);
+  border-radius: clamp(5px, .6vw, 9px);
+  overflow: hidden;
+  background: var(--bg-2);
+  box-shadow: 0 10px 22px -10px var(--shadow), 0 0 0 1px var(--line);
+  rotate: calc((var(--k) - 1) * 6deg);
+  translate: 0 calc((var(--k) - 1) * (var(--k) - 1) * 3px);
+  transition: rotate .7s var(--ease), translate .7s var(--ease), margin .7s var(--ease);
+}
+.index__mini img { width: 100%; height: 100%; object-fit: cover; }
+.index__mini--cutout img { object-fit: contain; padding: 10%; }
+@media (max-width: 519px) {
+  /* Tor ekranda bitta muqova qoladi: nom uchun joy kerak */
+  .index__mini:nth-child(n + 2) { display: none; }
+  .index__stack { padding-left: 0; }
+  .index__mini { margin-left: 0; rotate: 4deg; translate: none; }
+}
 @media (min-width: 900px) {
   .index__row { grid-template-columns: 56px minmax(0, 1fr) auto auto; }
+  .index__row.has-stack { grid-template-columns: 56px minmax(0, 1fr) auto auto auto; }
   .index__count { display: block; font: 500 .74rem var(--font-mono); letter-spacing: .06em; color: var(--muted); text-align: right; white-space: nowrap; }
 }
 @media (hover: hover) and (min-width: 900px) {
   .index__row:hover .index__main { translate: clamp(10px, 1.6vw, 28px) 0; }
+  .index__row:hover .index__mini { rotate: calc((var(--k) - 1) * 11deg); translate: calc((var(--k) - 1) * 9px) calc((var(--k) - 1) * (var(--k) - 1) * 6px); }
   .index__row:hover .index__go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); rotate: 45deg; }
   .index__thumb {
     position: absolute;
@@ -1070,6 +1284,8 @@ body:not(.has-overlay-header) .header::before,
   }
   .index__thumb .art__svg { width: 64%; }
   .index__thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .index__thumb.has-photo { aspect-ratio: 3 / 4; }
+  .index__thumb.has-cutout img { object-fit: contain; padding: 12%; filter: drop-shadow(0 12px 14px var(--shadow)); }
   .index__row:hover .index__thumb { opacity: 1; scale: 1; rotate: 5deg; }
 }
 
@@ -1091,6 +1307,62 @@ body:not(.has-overlay-header) .header::before,
   .spotlight__media:hover img { transform: scale(1.04); }
 }
 .spotlight__media .badges { top: 18px; left: 18px; }
+/* Rasmli tanlov: muqova 3:4 ramkada (sichqonchaga qarab og'adi), ortidan ikkinchi rasm ko'rinib turadi */
+.spotlight { overflow-x: clip; }
+.spotlight__media.has-photo {
+  /* Ekran bo'yiga sig'adigan eng katta 3:4 ramka; yon tomonda ikkinchi rasmga joy qoladi */
+  width: min(86%, calc((100svh - var(--header-h) - 64px) * .75));
+  aspect-ratio: 3 / 4;
+  max-height: none;
+  justify-self: center;
+  overflow: visible;
+  background: none;
+}
+.spotlight__frame {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: 0 40px 80px -36px var(--shadow);
+}
+.spotlight__back {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  filter: brightness(.7) saturate(.92);
+  transform: translate(14%, -3%) rotate(8deg) scale(.92);
+  transition: transform 1.2s var(--ease), filter .8s;
+}
+.spotlight__media.has-photo::before {
+  content: '';
+  position: absolute;
+  inset: -6% -14%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--tone) 26%, transparent), transparent 76%);
+  filter: blur(30px);
+}
+/* Fonsiz rasmli tanlov: tovar katta kartochka foni ustida turadi */
+.spotlight__frame--cutout {
+  border-radius: 0;
+  overflow: visible;
+  isolation: auto;
+  box-shadow: none;
+}
+.spotlight__media .spotlight__frame--cutout img {
+  object-fit: contain;
+  padding: 9%;
+  filter: drop-shadow(0 30px 32px var(--shadow)) drop-shadow(0 0 60px color-mix(in oklab, var(--tone) 20%, transparent));
+}
+@media (hover: hover) {
+  .spotlight__media.has-cutout:hover img { transform: scale(1.05) rotate(-2deg); }
+}
+@media (hover: hover) {
+  .spotlight__media:hover .spotlight__back { transform: translate(19%, -5%) rotate(11deg) scale(.92); filter: brightness(.85) saturate(.96); }
+}
 .spotlight__title {
   font: 800 clamp(1.7rem, 4.3vw, 3.9rem)/1.02 var(--font-display);
   letter-spacing: -.04em;
@@ -1182,6 +1454,7 @@ body:not(.has-overlay-header) .header::before,
 .band__link:focus-visible { outline-offset: -6px; }
 .band__card .art__svg { width: 62%; }
 .band__card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.band__card.has-cutout img { object-fit: contain; padding: 10%; filter: drop-shadow(0 14px 16px var(--shadow)); }
 @media (hover: hover) {
   .band__link:hover .band__card { translate: calc(-50% + (var(--n) - 1) * 80%) -54%; rotate: calc((var(--n) - 1) * 11deg); }
   .band__link:hover .btn::before { transform: none; }
@@ -1386,6 +1659,12 @@ body:not(.has-overlay-header) .header::before,
 .gallery__item--art .art__svg { width: min(58%, 440px); animation: float 8s ease-in-out infinite; }
 .gallery__item img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .gallery__item img.is-whole { object-fit: contain; }
+/* Fonsiz rasm: tovar kartochka foni ustida, kesilmasdan */
+.gallery__item img.is-cutout {
+  object-fit: contain;
+  padding: 8%;
+  filter: drop-shadow(0 26px 28px var(--shadow)) drop-shadow(0 0 54px color-mix(in oklab, var(--tone) 18%, transparent));
+}
 .gallery__note {
   position: absolute;
   left: 16px;
@@ -1661,6 +1940,10 @@ body:not(.has-overlay-header) .header::before,
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes float { 50% { transform: translateY(-12px) rotate(1.2deg); } }
+@keyframes deck-float { 50% { translate: 0 -2.8%; } }
+@keyframes deck-shine { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+@keyframes deck-tuck { 42% { translate: -64% 3%; rotate: -5deg; } }
+@keyframes deck-tuck-right { 42% { translate: 64% 3%; rotate: 5deg; } }
 @keyframes hero-bar { to { transform: scaleX(1); } }
 @keyframes marquee { to { transform: translateX(-50%); } }
 @keyframes zoom-in { from { opacity: 0; transform: scale(.94); } }

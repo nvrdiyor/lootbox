@@ -6,12 +6,13 @@ import { initReveal } from './reveal.js';
 import { initCursor } from './cursor.js';
 import { initTracking } from './track.js';
 import { initProduct } from './product.js';
+import { initTilt } from './tilt.js';
 
 // boot.js shu belgiga qarab biladi: asosiy skript yuklandi va ishlayapti
 document.documentElement.setAttribute('data-app', '1');
 document.documentElement.classList.add('js');
 
-const steps = [initHeader, initHero, initCarousels, initReveal, initCursor, initTracking, initProduct];
+const steps = [initHeader, initHero, initCarousels, initReveal, initCursor, initTracking, initProduct, initTilt];
 
 for (const step of steps) {
   try {

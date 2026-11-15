@@ -50,7 +50,7 @@ export default {
     fitBandCta: 'FIT bo‘limiga o‘tish',
     lootBandKicker: 'Asosiy bo‘lim',
     lootBandTitle: 'LOOTBOX — setup aksessuarlari',
-    lootBandText: 'Glaydlar, switchlar, gilamchalar va stol uchun aksessuarlar.',
+    lootBandText: 'Glaydlar, switchlar, gilamchalar va grip stikerlar.',
     lootBandCta: 'LOOTBOX bo‘limiga o‘tish',
     channelKicker: 'Telegram',
     channelTitle: 'Yangi tovarlar birinchi bo‘lib kanalda',

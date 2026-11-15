@@ -22,7 +22,9 @@ npm run dev
 | http://localhost:3210/fit | LOOTBOX FIT |
 | http://localhost:3210/admin | Admin panel |
 
-Birinchi ishga tushirishda baza yaratiladi va demo tovarlar yoziladi.
+Birinchi ishga tushirishda baza yaratiladi: LOOTBOX bo‘limiga Uzum’dagi do‘koningiz tovarlari (rasmlari bilan),
+FIT bo‘limiga namuna kiyimlar yoziladi.
+
 `npm run dev` rejimida fayl o‘zgarsa, sahifa o‘zi yangilanadi.
 
 ## Admin paroli qayerda
@@ -57,6 +59,69 @@ Rasm yuklanmagan tovarda kategoriyaga mos chizma ko‘rinadi.
 
 Ruxsat etilgan rasmlar: JPG, PNG, WebP. Tavsiya: 3:4 nisbat (masalan 1080×1440, Uzum’dagi kabi).
 
+## Tovarlar va rasmlar
+
+LOOTBOX bo‘limidagi tovarlar Uzum’dagi do‘koningizdan olingan: to‘rtta e’lonning har bir varianti (rang yoki model)
+saytda alohida tovar — jami 17 ta. Nomi, narxi va tavsifi o‘sha yerdagidek, tugma esa Uzum’da aynan shu variantni
+ochadi. Ro‘yxat `server/db/catalog-data.js` faylida turadi.
+
+**Rasmlar — faqat tovarning o‘zi, orqa fonsiz.** Uzum’dagi dizaynli kartochka-rasmlar saytga qo‘yilmaydi.
+Rasmlar ikki xil manbadan olingan:
+
+- **Internetdan topilgan toza suratlar** (oq fonli, yirik) — 12 ta tovar: switchlar, universal va model-glaydlar,
+  oq va qora grip stiker (sichqonchasi bilan). Ularning foni olib tashlangan.
+- **Uzum’dagi o‘z e’lon rasmlaringizdan kesilgan** — 5 ta tovar: KDA va Printstream grip stikerlar (bu dizaynlarning
+  toza suratini internetdan topib bo‘lmadi) va ARCANE gilamchalar (internetda faqat boshqa brend logotipi tushgan
+  asl gilamchaning rasmlari bor).
+
+Har bir rasm qaysi sahifadan olingani va qanday kesilgani `scripts/cutouts/specs.js` da yozilgan. Tayyor fayllar
+`server/db/catalog-media/` papkasida. Sayt fonsiz rasmni o‘zi taniydi va uni kartochka foni ustida, soya va
+yorug‘lik bilan, 3D sahnada ko‘rsatadi.
+
+> **Rasm huquqi.** Internetdan olingan suratlar begona sotuvchi yoki ishlab chiqaruvchiniki: ulardan foydalanish
+> huquqi sizning zimmangizda. Eng ishonchlisi — ta’minotchingiz bergan rasmlar yoki o‘zingiz olgan suratlar.
+> Loyiha ochiq GitHub repoda bo‘lsa, `server/db/catalog-media/` dagi rasmlar ham hamma uchun ochiq bo‘ladi.
+
+O‘z rasmingizni qo‘ymoqchi bo‘lsangiz: Admin → Tovarlar → tovar → rasmni yuklang. **Fonsiz PNG yoki WebP** yuklasangiz
+(shaffof fonli), u ham xuddi shunday «havoda turadigan» bo‘lib chiqadi. Foni bor oddiy surat ramkada ko‘rsatiladi.
+
+```bash
+npm run catalog
+```
+
+Yo‘q tovarlarni bazaga qo‘shadi va rasmi yo‘q tovarlarga tayyor rasmlarni biriktiradi. Internet kerak emas;
+qayta-qayta ishga tushirsa bo‘ladi: bor tovarga, admin panelda o‘zgartirgan nom va narxlaringizga hamda rasmi bor
+tovarga tegilmaydi.
+
+```bash
+npm run cutouts
+```
+
+Rasmlarni manbalaridan qaytadan yasaydi: manba suratni yuklab oladi va fonidan ajratadi (internet va kompyuterda
+Chrome kerak). Qaysi rasmdan va qanday kesilishi `scripts/cutouts/specs.js` da yozilgan. Yangi tovar qo‘shilganda,
+manba almashtirilganda yoki kesim yoqmaganda kerak bo‘ladi. Bitta rasmni yozmasdan tekshirib ko‘rish:
+`npm run cutouts -- --check grip-oq` (natija `data/shots/` papkasida).
+
+```bash
+npm run catalog -- --replace-images
+```
+
+Yangilangan rasmlarni bazadagi tovarlarga yozadi: katalog qo‘ygan eski rasmlar yangisiga almashtiriladi, admin
+paneldan o‘zingiz yuklagan rasmlarga tegilmaydi.
+
+Uzum’da narx o‘zgarsa, saytda o‘zi o‘zgarmaydi: admin panelda tahrirlaysiz.
+
+**Bosh sahifadagi katta blok (hero).** Har bir slayd uch xil ko‘rinishi mumkin:
+
+- slaydga rasm yuklangan — rasm butun ekranni egallaydi;
+- rasm yuklanmagan — slayd bog‘langan tovar (yoki kategoriyadagi tovarlar) 3D sahnada turadi: oldinda bittasi katta,
+  ortida yana ikkitasi; ular navbat bilan oldinga chiqadi va sichqonchaga qarab buriladi;
+- ularda ham rasm yo‘q — tanlangan chizma ko‘rsatiladi.
+
+Qaysi tovarlar chiqishini Admin → **Hero slaydlar** → slayd → «Tugma qayerga olib boradi» orqali tanlaysiz
+(Kategoriya yoki Tovar). Kategoriya tanlansa, undagi birinchi uchta tovar olinadi (tartibni Tovarlar sahifasida
+sudrab o‘zgartirasiz).
+
 ## Logotipni almashtirish
 
 Hozir logotip — chizilgan «LOOTBOX» so‘zi. O‘z logotipingizni qo‘yish uchun faylni shu nom bilan tashlang:
@@ -68,19 +133,16 @@ public/brand/logo-fit.svg
 
 Sayt o‘zi shu fayllarni ishlatadi. Fayl bo‘lmasa, chizilgan so‘z-logotip qoladi.
 
-## Demo tovarlar
+## Namuna (demo) tovarlar
 
-Demo tovar, slayd va kategoriyalar «Demo» deb belgilangan. O‘chirish: Admin → Sozlamalar → Demo ma’lumot,
-yoki buyruq bilan:
+LOOTBOX FIT do‘konida hozircha tovar yo‘q, shuning uchun FIT bo‘limida o‘ylab topilgan namuna kiyimlar turibdi
+(rasm o‘rnida chizma). Ular «Demo» deb belgilangan. O‘chirish: Admin → Sozlamalar → Demo ma’lumot, yoki buyruq bilan:
 
 ```bash
 npm run seed -- --clear
 ```
 
-O‘zingiz qo‘shgan tovarlarga tegilmaydi. Demo’ni qaytadan yozish: `npm run seed -- --reset`.
-
-To‘rtta demo tovar (glaydlar, switchlar, ARCANE gilamcha, grip stiker) Uzum’dagi haqiqiy tovarlaringizdan olingan:
-nomi, narxi va havolasi o‘sha yerdagidek. Qolganlari namuna.
+LOOTBOX tovarlariga va o‘zingiz qo‘shgan tovarlarga tegilmaydi. Namunani qaytadan yozish: `npm run seed -- --reset`.
 
 ## Buyruqlar
 
@@ -90,7 +152,9 @@ nomi, narxi va havolasi o‘sha yerdagidek. Qolganlari namuna.
 | `npm start` | Oddiy (production) rejim |
 | `npm run check` | Avtomatik tekshiruv: sahifalar, havolalar, rasm va admin himoyasi, serverga qo‘yilgandagi rejim. Vaqtinchalik bazada ishlaydi, ma’lumotingizga tegmaydi |
 | `npm run shots` | Saytni ko‘rinmas Chrome’da ochib, animatsiyali holatini suratga oladi: `data/shots/` (server ishlab turganda) |
-| `npm run seed` | Demo ma’lumot (`-- --reset`, `-- --clear`) |
+| `npm run catalog` | Uzum’dagi tovarlar: yo‘g‘ini bazaga qo‘shadi, rasmsiziga tayyor (fonsiz) rasmini biriktiradi. `-- --replace-images` bilan: yangilangan rasmlarni eskilari o‘rniga yozadi |
+| `npm run cutouts` | Tovar rasmlarini manba suratlardan qaytadan yasaydi (fonini olib tashlaydi): `server/db/catalog-media/` (internet va Chrome kerak) |
+| `npm run seed` | FIT bo‘limidagi namuna (demo) ma’lumot (`-- --reset`, `-- --clear`) |
 | `npm run og` | Telegram va ijtimoiy tarmoqlar uchun muqova rasmlarini qayta yaratadi (server ishlab turganda) |
 
 ## Animatsiyalar
@@ -113,7 +177,8 @@ Bu harakatdan boshi aylanadigan odamlar uchun qulayroq, lekin shu kompyuterda (a
 ```
 server/
   index.js, app.js, config.js   ishga tushirish, yo‘llar, sozlamalar (.env)
-  db/        baza sxemasi, so‘rovlar (repo.js), demo ma’lumot (seed.js)
+  db/        baza sxemasi, so‘rovlar (repo.js), Uzum’dagi tovarlar (catalog-data.js) va ularning fonsiz
+             rasmlari (catalog-media/), namuna (seed.js)
   lib/       havolalar, rasm tekshiruvi, admin himoyasi, HTML shablon yordamchisi
   site/      sayt sahifalari: bosh sahifa, katalog, tovar; chizmalar (art.js), logotip (brand.js)
   admin/     admin panel sahifalari va API
@@ -126,7 +191,7 @@ public/
   vendor/    shrift fayllari, SortableJS
   brand/     muqova rasmlari; o‘z logotipingiz shu yerga
 data/        baza (lootbox.db) va yuklangan rasmlar (uploads/) — git’ga tushmaydi
-scripts/     tekshiruv va muqova skriptlari
+scripts/     tekshiruv, katalog, rasmni fonsiz qilish (cutouts), surat va muqova skriptlari
 ```
 
 **Zaxira nusxa:** `data/` papkasini nusxalab qo‘ysangiz kifoya — baza ham, rasmlar ham shu yerda.
@@ -148,7 +213,9 @@ Qadamlar `server/i18n/index.js` boshida yozilgan.
 
 Hozir sayt faqat shu kompyuterda ishlaydi. VPS’ga qo‘yilganda:
 
-1. loyihani ko‘chirish, `npm ci --omit=dev`, `npm start` (systemd yoki pm2 orqali);
+1. loyihani ko‘chirish, `npm ci --omit=dev`, `npm start` (systemd yoki pm2 orqali). Admin panelda qilgan
+   o‘zgarishlaringiz (narx, matn, o‘zingiz yuklagan rasmlar) git’da emas, `data/` papkasida: uni ham serverga
+   ko‘chiring. Ko‘chirmasangiz, server boshlang‘ich katalog bilan (17 tovar, rasmlari bilan) boshlaydi;
 2. `.env` da: kuchli `ADMIN_PASSWORD`, `SITE_URL=https://domeningiz`, nginx ortida `TRUST_PROXY=true`;
 3. nginx: domen → `http://127.0.0.1:3210`, HTTPS, gzip va shu uch qator (ularsiz parol urinishlari cheklovi
    va «faqat o‘z saytimizdan» tekshiruvi to‘g‘ri ishlamaydi):

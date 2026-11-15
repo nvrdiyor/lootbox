@@ -123,4 +123,14 @@ export const MIGRATIONS = [
     PRIMARY KEY (day, product_id, kind)
   ) WITHOUT ROWID;
   `,
+  // Kichik nusxaning haqiqiy kengligi (px). Bo'sh bo'lsa — eski qoida: uzun tomoni 800 px gacha.
+  // Uzum rasm serveridan olingan kichik nusxalar 800 px kenglikda keladi, shuning uchun aniq yoziladi.
+  `
+  ALTER TABLE images ADD COLUMN thumb_width INTEGER;
+  `,
+  // Fonsiz (shaffof joylari bor) rasm: tovarning o'zi kesib olingan. Sayt bunday rasmni kesmaydi va
+  // ustiga fon rangi bermaydi — kartochka foni ustida "suzib" turadi.
+  `
+  ALTER TABLE images ADD COLUMN cutout INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

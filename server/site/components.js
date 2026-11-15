@@ -21,10 +21,18 @@ export function kicker(label, number = null) {
 
 // ---- Rasm ------------------------------------------------------------------
 
+/** Kichik nusxaning kengligi: bazada yozilgan bo'lsa o'sha, bo'lmasa yuklash qoidasidan (uzun tomoni 800 px) */
 function thumbWidth(image) {
+  if (image.thumb_width) return image.thumb_width;
   const scale = Math.min(1, 800 / Math.max(image.width, image.height));
   return Math.max(1, Math.round(image.width * scale));
 }
+
+/**
+ * Rasm turi: fonsiz (tovarning o'zi kesib olingan) rasm — 'cutout', oddiy surat — 'photo'.
+ * Fonsiz rasm kesilmaydi va kartochkaning o'z foni ustida turadi; oddiy surat ramkani to'ldiradi.
+ */
+export const mediaKind = (image) => (image ? (image.cutout ? 'cutout' : 'photo') : '');
 
 export function picture(image, { alt = '', sizes = '100vw', eager = false, className = '' } = {}) {
   const hasThumb = image.thumb_url !== image.url;
@@ -39,7 +47,8 @@ export function picture(image, { alt = '', sizes = '100vw', eager = false, class
     loading: eager ? 'eager' : 'lazy',
     decoding: 'async',
     fetchpriority: eager ? 'high' : null,
-    style: image.color ? `background-color:${image.color}` : null,
+    // Yuklanguncha ko'rinadigan fon rangi. Fonsiz rasmga berilmaydi — shaffof joyidan ko'rinib qoladi
+    style: image.color && !image.cutout ? `background-color:${image.color}` : null,
   })}>`;
 }
 
@@ -56,18 +65,24 @@ export function price(ctx, product, className = 'price') {
   </p>`;
 }
 
-export function badges(ctx, product) {
+/**
+ * "Yangi", "Xit" va chegirma belgilari. inline = true bo'lsa, rasm ustida emas, matn qatorida
+ * turadi: haqiqiy tovar rasmlarida o'z yozuvlari bor, belgilar ularni yopib qo'ymasligi kerak.
+ */
+export function badges(ctx, product, { inline = false } = {}) {
   const off = ctx.showPrices ? discountPercent(product.price, product.old_price) : 0;
   const list = [];
   if (product.badge_new) list.push(html`<span class="badge badge--new">${ctx.t.product.new}</span>`);
   if (product.badge_hit) list.push(html`<span class="badge badge--hit">${ctx.t.product.hit}</span>`);
   if (off) list.push(html`<span class="badge badge--sale">−${off}%</span>`);
-  return list.length ? html`<div class="badges">${list}</div>` : '';
+  return list.length ? html`<div class="badges${inline ? ' badges--inline' : ''}">${list}</div>` : '';
 }
 
 // ---- Tovar kartochkasi -------------------------------------------------------
 
-export function productCard(ctx, product, { eager = false, sizes = '(min-width: 1024px) 24vw, (min-width: 640px) 34vw, 68vw' } = {}) {
+// sizes: telefon uchun ataylab kamtarroq qiymat (karuselda kartochka aslida ekranning ~2/3 qismi):
+// yuqori zichlikdagi ekranda ham brauzer bir necha yuz KB lik to'liq rasmni emas, kichik nusxani oladi.
+export function productCard(ctx, product, { eager = false, sizes = '(min-width: 1024px) 24vw, (min-width: 640px) 34vw, 50vw' } = {}) {
   const { t } = ctx;
   const name = ctx.tr(product, 'name');
   const tone = toneFor(product.brand, product.id);
@@ -75,10 +90,14 @@ export function productCard(ctx, product, { eager = false, sizes = '(min-width: 
   // Sozlamada "kartochka bosilganda to'g'ridan-to'g'ri havolaga" tanlangan bo'lsa
   const direct = ctx.settings.card_click === 'direct' && dest;
   const [cover, second] = product.images;
+  const kind = mediaKind(cover);
+  const imgClass = (image) => `card__img${image.cutout ? ' card__img--cutout' : ''}`;
 
   const media = cover
-    ? html`${picture(cover, { alt: name, sizes, eager, className: 'card__img' })}${second ? picture(second, { sizes, className: 'card__img card__img--alt' }) : ''}`
+    ? html`${picture(cover, { alt: name, sizes, eager, className: imgClass(cover) })}${second ? picture(second, { sizes, className: `${imgClass(second)} card__img--alt` }) : ''}`
     : html`<div class="card__art">${artSvg(artKeyOf(product))}</div>`;
+  // Belgilar ("Yangi", "−23%"): o'z yozuvi bor suratda rasm ostidagi qatorga tushadi, aks holda rasm burchagida
+  const badgesInline = kind === 'photo';
 
   const linkAttrs = direct
     ? attrs({ href: dest.url, target: '_blank', rel: 'noopener', 'data-track': dest.type })
@@ -86,12 +105,13 @@ export function productCard(ctx, product, { eager = false, sizes = '(min-width: 
 
   return html`<article class="card" data-product="${product.id}">
     <a class="card__link"${linkAttrs}>
-      <div class="card__media art${cover ? ' has-photo' : ''}" style="${toneStyle(tone)}" data-vt-media>
+      <div class="card__media art${kind ? ` has-${kind}` : ''}" style="${toneStyle(tone)}" data-vt-media${cover ? raw(' data-tilt3d') : ''}>
         ${media}
-        ${badges(ctx, product)}
+        ${badgesInline ? '' : badges(ctx, product)}
         <span class="card__code" aria-hidden="true">${productCode(product)}</span>
       </div>
       <div class="card__body">
+        ${badgesInline ? badges(ctx, product, { inline: true }) : ''}
         ${product.category ? html`<p class="card__cat">${product.category.name}</p>` : ''}
         <h3 class="card__name">${name}</h3>
         ${price(ctx, product)}

@@ -9,6 +9,8 @@ Reply to the owner in Uzbek; give times in Tashkent time.
 - `npm run dev` → http://localhost:3210 (`node --watch`; pages reload themselves in dev).
 - `npm run check` → regression suites on temporary databases (storefront, admin API, behind-nginx mode). Run it after every change; add a check for every bug you fix.
 - `npm run shots` → real-time headless Chrome screenshots of the animated storefront in `data/shots/`. Use it to judge motion and layout; see "Traps".
+- `npm run catalog` → writes the owner's real Uzum listings (`server/db/catalog-data.js`: 17 products, one per colour/model variant) and attaches their product images from `server/db/catalog-media/`. Offline and idempotent; never touches a product that exists or already has images. The first start of an empty database does the same. `-- --replace-images` swaps the images the catalog itself attached for the current files in `catalog-media/` (images an admin uploaded are left alone unless `--force`).
+- `npm run cutouts` → rebuilds those images from their sources in headless Chrome (`scripts/cutouts.js`, page code `scripts/cutouts/page.js`, one spec per image in `scripts/cutouts/specs.js`). `-- --check <name>` writes nothing to the repo: it puts a dark-background preview and, for outline specs, an unrolled edge strip in `data/shots/`. Needs internet and Chrome; then `npm run catalog -- --replace-images`.
 
 ## Conventions
 
@@ -17,7 +19,10 @@ Reply to the owner in Uzbek; give times in Tashkent time.
 - Data access only through `server/db/repo.js`; schema changes are appended to `MIGRATIONS` in `server/db/schema.js`, never edited in place.
 - Storefront strings live in `server/i18n/uz.js`. Uzbek Latin with ‘ for o‘/g‘ and ’ for the tutuq belgisi, formal "siz". `*_ru` columns and the i18n layer are ready for Russian.
 - Every link an admin can enter is validated in `server/admin/validate.js` with the parsers in `server/lib/links.js`; the storefront re-validates at render.
-- Uploaded images are resized in the browser (`public/admin/js/uploader.js`) and type-checked by bytes on the server (`server/lib/images.js`).
+- Uploaded images are resized in the browser (`public/admin/js/uploader.js`) and type-checked by bytes on the server (`server/lib/images.js`). The server cannot resize; anything that needs a thumbnail outside the admin gets it from a browser (see `scripts/catalog.js`).
+- LOOTBOX content is real (`is_demo = 0`, seeded by `seedCatalog()`), LOOTBOX FIT is invented sample content (`is_demo = 1`, `seedDemo()`): the FIT shop on Uzum has no listings yet, so it has no photos and keeps the drawn glyphs.
+- Product images are **cut-outs**: the product alone on a transparent background (grip stickers on their mouse). The owner rejected the Uzum listing posters as site imagery outright; never put them on the storefront. He then rejected the first cut-outs made from those posters as low quality (leftover glow and haze of the poster background) and asked for images from the internet. So 12 of the 17 are clean white-background product photos found online (other sellers' or makers' photos: the source page is recorded per image in the specs, and the README tells the owner the usage rights are his to settle); 5 are still cut from his own posters because no clean photo of the same product exists (KDA and Printstream grips; the ARCANE pads, whose only online photos show another brand's logo). Judge every cut-out at 100% on the dark tile: nothing of the source background may remain. A cut-out is detected from the file's alpha channel (`images.cutout`, set by `storeImage`) and rendered floating on the card's own tile (`has-cutout`, `mediaKind()`); an opaque photo an admin uploads still works (`has-photo`: framed, badges moved to the text row because such photos often carry their own text).
+- A hero slide without its own image shows its linked product or category as a 3D stage (one product in front, two smaller behind, rotating places); the rule lives in `server/site/slide-photos.js` and the admin slide preview mirrors it.
 
 ## Traps
 
@@ -27,4 +32,10 @@ Reply to the owner in Uzbek; give times in Tashkent time.
 - Chrome's CLI `--screenshot --virtual-time-budget` hangs on the dev server (open live-reload stream) and freezes main-thread animations. Always give headless Chrome its own `--user-data-dir`.
 - The Write/Edit tools turn a single-backslash `\u` escape into the raw character. Build invisible characters with `String.fromCharCode(...)` and re-read any regex after writing it.
 - `npm run seed` while the server runs changes settings behind its cache: restart the server afterwards.
+- Uzum's image CDN (`images.uzum.uz/<id>/…`): only `original.jpg` is clean. The resized variants (`t_product_high.jpg` 800×1066, `t_product_540_high.jpg`, …) are padded with white columns whenever the aspect does not match. Always start from the original.
+- Cut-outs: a photo on a flat white background cuts automatically (`CUT.white`). It fails for a white product with a soft shadow and for any poster; those need an `outline` spec. Outline points read off a zoomed view were wrong by 10 to 50 px every time: run `npm run cutouts -- --check <name>`, read the edge strip (cut line in the middle, outside above, inside below) and correct each point with its fourth element, a shift along the normal. Soft shadows, haze and neon streaks fool the edge snapping; give those stretches fixed points (flag `1`).
+- Git Bash rewrites an argument that starts with a slash (`/katalog`) into a Windows path, so a helper script given a URL path opens nothing and screenshots come out blank. Prefix the command with `MSYS_NO_PATHCONV=1`.
+- Other sellers' photos often carry an overlay (zoom circle, caption). `drop` cuts it away and `patches` refills the part that covered the product. Never use a photo that shows another brand's logo on the product itself.
+- `PRAGMA busy_timeout` must stay the first pragma in `server/db/index.js`: with it last, a server restart that overlaps a CLI write (`npm run catalog`) dies with "database is locked".
+- In the Browser pane a page that gets no frames looks empty (hero and `[data-reveal]` blocks stay in their hidden start state). Check `requestAnimationFrame` before calling it a bug.
 - Not deployed. Ask before touching any server.
