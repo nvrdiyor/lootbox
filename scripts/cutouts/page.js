@@ -1,9 +1,11 @@
 // Tovar rasmini fonidan ajratib oladigan kod. Ko'rinmas Chrome sahifasi ichida ishlaydi (scripts/cutouts.js yuklaydi),
-// tashqi dastur yoki xizmat ishlatilmaydi. Ikki usul bor:
+// tashqi dastur yoki xizmat ishlatilmaydi. Uch usul bor:
 //   CUT.white(src, opts)   — oq (bir tekis) fonli rasm: chetdan boshlab fon rangidagi piksellar "to'ldiriladi", tovar
 //                            ichidagi oq joylar saqlanadi, chekkadagi aralash piksellardan fon rangi ayiriladi;
 //   CUT.outline(src, opts) — fon murakkab bo'lsa (plakat, soya): qo'lda chizilgan kontur bo'yicha. Kontur nuqtalari
-//                            taxminiy bo'lishi mumkin — dastur ularni haqiqiy chekkaga tortadi (pastga qarang).
+//                            taxminiy bo'lishi mumkin — dastur ularni haqiqiy chekkaga tortadi (pastga qarang);
+//   CUT.pad(src, opts)     — gilamcha kesilmaydi, o'lchamlari bo'yicha qaytadan chiziladi; src — logotipi ko'rinib
+//                            turgan haqiqiy surat (logotip shundan ko'chiriladi).
 // Natija sahifada saqlanadi; CUT.webp(tomon, sifat) uni saytga tayyor WebP qilib beradi.
 // Sozlamalar (opts) ta'rifi: scripts/cutouts/specs.js boshida.
 (() => {
@@ -887,6 +889,430 @@
     return JSON.stringify({ stats, outline: finalSource, preview: o.debug ? await toBase64(preview, 'image/jpeg', 0.92) : null, strip: o.debug ? await toBase64(strip, 'image/png') : null });
   }
 
+  // ---- Gilamchani qayta chizish (render) ----
+  // Plakatdan kesilgan gilamcha xira chiqadi: plakat kichik, siqilgan va yorug'lik dog'lari bilan. Gilamcha esa tekis
+  // buyum — uni o'z o'lchamlari bo'yicha, plakatdagi ko'rinish burchagida qaytadan chizish mumkin: bir tekis mato sirt,
+  // yon qalinligi va HAQIQIY SURATDAN ko'chirilgan logotip bilan. Manba rasm (src) — logotip ko'rinib turgan surat.
+  const mul3 = (a, b) => {
+    const out = new Array(9).fill(0);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) for (let k = 0; k < 3; k++) out[r * 3 + c] += a[r * 3 + k] * b[k * 3 + c];
+    return out;
+  };
+  const inv3 = (m) => {
+    const [a, b, c, d, e, f, g, h, i] = m;
+    const A = e * i - f * h;
+    const B = -(d * i - f * g);
+    const C = d * h - e * g;
+    const det = a * A + b * B + c * C;
+    return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map((v) => v / det);
+  };
+  function solveLinear(A, b) {
+    const n = b.length;
+    const M = A.map((row, i) => [...row, b[i]]);
+    for (let col = 0; col < n; col++) {
+      let pivot = col;
+      for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[pivot][col])) pivot = r;
+      [M[col], M[pivot]] = [M[pivot], M[col]];
+      const d = M[col][col];
+      if (Math.abs(d) < 1e-12) throw new Error('nuqtalar bir chiziqda yotibdi');
+      for (let k = col; k <= n; k++) M[col][k] /= d;
+      for (let r = 0; r < n; r++) {
+        const f = M[r][col];
+        if (r === col || !f) continue;
+        for (let k = col; k <= n; k++) M[r][k] -= f * M[col][k];
+      }
+    }
+    return M.map((row) => row[n]);
+  }
+  // (x, y) → (X, Y) proyektiv almashtirish, [[x, y, X, Y], ...] juftliklari bo'yicha (4 ta — aniq, ko'p bo'lsa — eng
+  // kichik kvadratlar). Hisob barqaror bo'lishi uchun nuqtalar avval markazga keltirilib, masshtablanadi.
+  function homography(pairs) {
+    const normalizer = (pts) => {
+      const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      const spread = pts.reduce((s, p) => s + Math.hypot(p[0] - mx, p[1] - my), 0) / pts.length || 1;
+      const k = Math.SQRT2 / spread;
+      return [k, 0, -k * mx, 0, k, -k * my, 0, 0, 1];
+    };
+    const from = normalizer(pairs.map((p) => [p[0], p[1]]));
+    const to = normalizer(pairs.map((p) => [p[2], p[3]]));
+    const AtA = Array.from({ length: 8 }, () => new Array(8).fill(0));
+    const Atb = new Array(8).fill(0);
+    const add = (row, value) => {
+      for (let i = 0; i < 8; i++) {
+        Atb[i] += row[i] * value;
+        for (let j = 0; j < 8; j++) AtA[i][j] += row[i] * row[j];
+      }
+    };
+    for (const p of pairs) {
+      const x = from[0] * p[0] + from[2];
+      const y = from[4] * p[1] + from[5];
+      const X = to[0] * p[2] + to[2];
+      const Y = to[4] * p[3] + to[5];
+      add([x, y, 1, 0, 0, 0, -x * X, -y * X], X);
+      add([0, 0, 0, x, y, 1, -x * Y, -y * Y], Y);
+    }
+    const h = mul3(inv3(to), mul3([...solveLinear(AtA, Atb), 1], from));
+    return h.map((v) => v / h[8]);
+  }
+  const project = (h, x, y) => {
+    const w = h[6] * x + h[7] * y + h[8];
+    return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
+  };
+  const smooth = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+
+  async function renderPad(src, o = {}) {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const [PW, PH, PT] = o.size; // mm: eni, bo'yi, qalinligi
+    const radius = o.radius ?? 15;
+    const stats = { source: [img.naturalWidth, img.naturalHeight], mode: 'pad' };
+
+    // 1. Ko'rinish: gilamcha tekisligi (mm; boshi chap-yuqori burchakda, v pastga) → manzara pikseli. `view` — plakatdagi
+    //    to'rt burchak (chap-yuqori, o'ng-yuqori, o'ng-past, chap-past). Shundan kamera ham tiklanadi (yon devor uchun).
+    const corners = [[0, 0], [PW, 0], [PW, PH], [0, PH]];
+    const top = homography(o.view.map(([x, y], i) => [corners[i][0], corners[i][1], x, y]));
+    const xs = o.view.map((p) => p[0]);
+    const ys = o.view.map((p) => p[1]);
+    const [cx, cy] = o.viewCenter || [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+    const column = (j) => [top[j] - cx * top[6 + j], top[3 + j] - cy * top[6 + j], top[6 + j]];
+    const h1 = column(0);
+    const h2 = column(1);
+    const h3 = column(2);
+    // fokus masofasi: r1 ⟂ r2 va |r1| = |r2| shartlaridan
+    const guesses = [
+      -(h1[0] * h2[0] + h1[1] * h2[1]) / (h1[2] * h2[2]),
+      (h2[0] ** 2 + h2[1] ** 2 - h1[0] ** 2 - h1[1] ** 2) / (h1[2] ** 2 - h2[2] ** 2),
+    ].filter((v) => Number.isFinite(v) && v > 0);
+    const focal = o.focal || (guesses.length ? Math.sqrt(guesses.reduce((s, v) => s + v, 0) / guesses.length) : 4 * (Math.max(...xs) - Math.min(...xs)));
+    stats.focal = [Math.round(focal), ...guesses.map((v) => Math.round(Math.sqrt(v)))];
+    const unit = (v) => {
+      const l = Math.hypot(v[0], v[1], v[2]);
+      return [v[0] / l, v[1] / l, v[2] / l, l];
+    };
+    const r1 = unit([h1[0] / focal, h1[1] / focal, h1[2]]);
+    const r2 = unit([h2[0] / focal, h2[1] / focal, h2[2]]);
+    const lambda = (r1[3] + r2[3]) / 2;
+    let r3 = [r1[1] * r2[2] - r1[2] * r2[1], r1[2] * r2[0] - r1[0] * r2[2], r1[0] * r2[1] - r1[1] * r2[0]];
+    const t = [h3[0] / focal, h3[1] / focal, h3[2]];
+    if (r3[0] * t[0] + r3[1] * t[1] + r3[2] * t[2] > 0) r3 = r3.map((v) => -v); // normal kameraga qaragan bo'lsin
+    // gilamchaning tagi (w = −PT) uchun almashtirish: uchinchi ustun normal bo'ylab suriladi
+    const dz = -PT * lambda;
+    const shift = [dz * focal * r3[0], dz * focal * r3[1], dz * r3[2]];
+    const bottom = top.slice();
+    bottom[2] += shift[0] + cx * shift[2];
+    bottom[5] += shift[1] + cy * shift[2];
+    bottom[8] += shift[2];
+
+    const halfW = PW / 2;
+    const halfH = PH / 2;
+    const sdf = (u, v) => {
+      const qx = Math.abs(u - halfW) - (halfW - radius);
+      const qy = Math.abs(v - halfH) - (halfH - radius);
+      return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+    };
+    const normal = (u, v) => {
+      const sx = u < halfW ? -1 : 1;
+      const sy = v < halfH ? -1 : 1;
+      const qx = Math.abs(u - halfW) - (halfW - radius);
+      const qy = Math.abs(v - halfH) - (halfH - radius);
+      if (qx > 0 && qy > 0) {
+        const l = Math.hypot(qx, qy) || 1;
+        return [(sx * qx) / l, (sy * qy) / l];
+      }
+      return qx > qy ? [sx, 0] : [0, sy];
+    };
+
+    // 2. Kadr: gilamcha (usti va tagi) egallagan to'rtburchak, kerakli kenglikka masshtablanadi
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const h of [top, bottom]) {
+      for (let step = 0; step < 720; step++) {
+        // yumaloq burchakli to'rtburchak chegarasi: to'rtta burchak yoyi (eng chetki nuqtalar shularda)
+        const a = (step / 720) * Math.PI * 2;
+        const ux = halfW + Math.sign(Math.cos(a)) * (halfW - radius) + Math.cos(a) * radius;
+        const vy = halfH + Math.sign(Math.sin(a)) * (halfH - radius) + Math.sin(a) * radius;
+        const [x, y] = project(h, ux, vy);
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+    const margin = 2;
+    const W = o.width ?? 1400; // aynan shu kenglikda chiziladi — keyin kichraytirilmaydi (mato doni yo'qolmasin)
+    const k = (W - margin * 2) / (x1 - x0);
+    const H = Math.ceil((y1 - y0) * k) + margin * 2;
+    // natija pikseli → manzara pikseli → gilamcha tekisligi
+    const toScene = [1 / k, 0, x0 - margin / k, 0, 1 / k, y0 - margin / k, 0, 0, 1];
+    const invTop = mul3(inv3(top), toScene);
+    const invBottom = mul3(inv3(bottom), toScene);
+
+    // 3. Logotip niqobi: haqiqiy suratdagi logotip gilamcha tekisligiga "tekislanadi" (logo.points: [surat x, y, mm u, v]),
+    //    oq bo'yoq qizil/qora matodan ajratiladi, mato nuqtalari silliqlanadi va chetlari qayta keskinlashtiriladi.
+    let logo = null;
+    if (o.logo) {
+      const L = o.logo;
+      const toPhoto = homography(L.points.map(([px, py, u, v]) => [u, v, px, py]));
+      const res = L.res ?? 16; // niqob aniqligi, piksel/mm
+      const [u0, v0, u1, v1] = L.box;
+      const lw = Math.round((u1 - u0) * res);
+      const lh = Math.round((v1 - v0) * res);
+      const pc = document.createElement('canvas');
+      pc.width = img.naturalWidth;
+      pc.height = img.naturalHeight;
+      const pctx = pc.getContext('2d', { willReadFrequently: true });
+      pctx.drawImage(img, 0, 0);
+      const pd = pctx.getImageData(0, 0, pc.width, pc.height).data;
+      const [lo, hi] = L.levels ?? [38, 62];
+      const white = (x, y) => {
+        // oqlik: yashil va ko'k kanalning kichigi (qizil matoda ikkalasi past, oq bo'yoqda baland); ikki chiziqli o'qish
+        const xi = Math.max(0, Math.min(pc.width - 2, Math.floor(x)));
+        const yi = Math.max(0, Math.min(pc.height - 2, Math.floor(y)));
+        const fx = Math.max(0, Math.min(1, x - xi));
+        const fy = Math.max(0, Math.min(1, y - yi));
+        const at = (xx, yy) => {
+          const q = (yy * pc.width + xx) * 4;
+          return Math.min(pd[q + 1], pd[q + 2]);
+        };
+        return (at(xi, yi) * (1 - fx) + at(xi + 1, yi) * fx) * (1 - fy) + (at(xi, yi + 1) * (1 - fx) + at(xi + 1, yi + 1) * fx) * fy;
+      };
+      const raw = new Float32Array(lw * lh);
+      for (let j = 0; j < lh; j++) {
+        for (let i = 0; i < lw; i++) {
+          const [x, y] = project(toPhoto, u0 + (i + 0.5) / res, v0 + (j + 0.5) / res);
+          raw[j * lw + i] = white(x - 0.5, y - 0.5);
+        }
+      }
+      // Oqlik har bir nuqtada atrofdagi eng yorug' joyga nisbatan o'lchanadi: ingichka va xiraroq chiqqan mayda harflar
+      // ham yo'g'on chiziqlar kabi to'liq olinadi (levels: [mato darajasi, "oq" deb hisoblanadigan eng past daraja])
+      const reachPx = L.reach ?? 8;
+      const maxFilter = (srcArr, horizontal) => {
+        const outArr = new Float32Array(lw * lh);
+        for (let j = 0; j < lh; j++) {
+          for (let i = 0; i < lw; i++) {
+            let best = 0;
+            for (let d = -reachPx; d <= reachPx; d++) {
+              const xx = horizontal ? Math.max(0, Math.min(lw - 1, i + d)) : i;
+              const yy = horizontal ? j : Math.max(0, Math.min(lh - 1, j + d));
+              const value = srcArr[yy * lw + xx];
+              if (value > best) best = value;
+            }
+            outArr[j * lw + i] = best;
+          }
+        }
+        return outArr;
+      };
+      const peak = maxFilter(maxFilter(raw, true), false);
+      let mask = new Float32Array(lw * lh);
+      for (let i = 0; i < mask.length; i++) mask[i] = Math.max(0, Math.min(1, (raw[i] - lo) / (Math.max(peak[i], hi) - lo)));
+      // silliqlash (uch marta quti-filtr ≈ Gauss), so'ng keskin chegara
+      const blurRadius = L.blur ?? 1;
+      const box = (srcArr, horizontal) => {
+        const out = new Float32Array(lw * lh);
+        const len = horizontal ? lw : lh;
+        const lines = horizontal ? lh : lw;
+        for (let line = 0; line < lines; line++) {
+          let sum = 0;
+          const at = (p) => srcArr[horizontal ? line * lw + Math.max(0, Math.min(len - 1, p)) : Math.max(0, Math.min(len - 1, p)) * lw + line];
+          for (let p = -blurRadius; p <= blurRadius; p++) sum += at(p);
+          for (let p = 0; p < len; p++) {
+            out[horizontal ? line * lw + p : p * lw + line] = sum / (blurRadius * 2 + 1);
+            sum += at(p + blurRadius + 1) - at(p - blurRadius);
+          }
+        }
+        return out;
+      };
+      if (blurRadius > 0) for (let pass = 0; pass < 3; pass++) mask = box(box(mask, true), false);
+      const [e0, e1] = L.edge ?? [0.2, 0.45];
+      const solid = new Uint8Array(lw * lh);
+      for (let i = 0; i < mask.length; i++) {
+        mask[i] = smooth(e0, e1, mask[i]);
+        solid[i] = mask[i] > 0.5 ? 1 : 0;
+      }
+      // chang va mato nuqtalaridan qolgan mayda bo'laklar tashlanadi
+      const minArea = L.minArea ?? 40;
+      let dropped = 0;
+      for (const part of components(solid, lw, lh)) {
+        if (part.area >= minArea) continue;
+        dropped++;
+        const [bx0, by0, bx1, by1] = part.bbox;
+        for (let yy = Math.max(0, by0 - 3); yy <= Math.min(lh - 1, by1 + 3); yy++) {
+          for (let xx = Math.max(0, bx0 - 3); xx <= Math.min(lw - 1, bx1 + 3); xx++) mask[yy * lw + xx] = 0;
+        }
+      }
+      stats.logo = [lw, lh, dropped];
+      logo = { mask, lw, lh, u0, v0, res };
+      if (o.debug) {
+        const lc = document.createElement('canvas');
+        lc.width = lw;
+        lc.height = lh;
+        const ld = new ImageData(lw, lh);
+        for (let i = 0; i < mask.length; i++) {
+          const value = Math.round(mask[i] * 255);
+          ld.data[i * 4] = value; ld.data[i * 4 + 1] = value; ld.data[i * 4 + 2] = value; ld.data[i * 4 + 3] = 255;
+        }
+        lc.getContext('2d').putImageData(ld, 0, 0);
+        logo.canvas = lc;
+      }
+    }
+    const logoAt = (u, v) => {
+      if (!logo) return 0;
+      const x = (u - logo.u0) * logo.res - 0.5;
+      const y = (v - logo.v0) * logo.res - 0.5;
+      if (x < 0 || y < 0 || x >= logo.lw - 1 || y >= logo.lh - 1) return 0;
+      const xi = Math.floor(x);
+      const yi = Math.floor(y);
+      const fx = x - xi;
+      const fy = y - yi;
+      const q = yi * logo.lw + xi;
+      return (logo.mask[q] * (1 - fx) + logo.mask[q + 1] * fx) * (1 - fy) + (logo.mask[q + logo.lw] * (1 - fx) + logo.mask[q + logo.lw + 1] * fx) * fy;
+    };
+
+    // 4. Mato: tasodifiy mayda don (takrorlanuvchi naqsh yo'q — muar chiqmaydi), yirikroq notekislik va yorug'lik
+    let seed = o.seed ?? 20261116;
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let r = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+    const table = (size) => {
+      const values = new Float32Array(size * size);
+      for (let i = 0; i < values.length; i++) values[i] = random() - 0.5;
+      return { values, size };
+    };
+    const fine = table(512);
+    const mid = table(128);
+    const low = table(32);
+    const nearest = (tb, u, v, cell) => tb.values[((Math.floor(v / cell) & (tb.size - 1)) * tb.size) + (Math.floor(u / cell) & (tb.size - 1))];
+    const bilinear = (tb, u, v, cell) => {
+      const x = u / cell;
+      const y = v / cell;
+      const xi = Math.floor(x);
+      const yi = Math.floor(y);
+      const fx = x - xi;
+      const fy = y - yi;
+      const m = tb.size - 1;
+      const at = (a, b) => tb.values[((b & m) * tb.size) + (a & m)];
+      const sx = fx * fx * (3 - 2 * fx);
+      const sy = fy * fy * (3 - 2 * fy);
+      return (at(xi, yi) * (1 - sx) + at(xi + 1, yi) * sx) * (1 - sy) + (at(xi, yi + 1) * (1 - sx) + at(xi + 1, yi + 1) * sx) * sy;
+    };
+    const S = { grain: 0.085, weave: 0.035, cloud: 0.03, light: 0.16, lightDir: [0.8, 0.6], sheen: 0.05, rim: 0.1, ...(o.shade || {}) };
+    const base = o.color;
+    const logoColor = o.logoColor || [238, 228, 226];
+    const logoOpacity = o.logoOpacity ?? 0.9;
+    const foam = o.foam || [15, 15, 17];
+    const fabricEdge = o.fabricEdge ?? 0.1; // yon devorning yuqori qismi — matoning kesilgan cheti (qalinlik ulushi)
+    const wallLight = (() => {
+      const l = Math.hypot(...(o.wallLight || [-0.5, 0.85]));
+      return (o.wallLight || [-0.5, 0.85]).map((v) => v / l);
+    })();
+
+    const shadeTop = (u, v, depth, outRgb) => {
+      const texture = 1 + S.grain * nearest(fine, u, v, 0.28) + S.weave * bilinear(mid, u, v, 1.6) + S.cloud * bilinear(low, u, v, 42);
+      const light = 1 + S.light * ((0.5 - u / PW) * S.lightDir[0] + (0.5 - v / PH) * S.lightDir[1]);
+      const rim = 1 - S.rim * (1 - smooth(0, 1.3, depth)); // chetida mato biroz pastga egiladi — sal to'qroq
+      const sheen = S.sheen * smooth(0.25, 1, 1 - u / PW);
+      const m = logoAt(u, v) * logoOpacity;
+      for (let c = 0; c < 3; c++) {
+        let value = base[c] * texture * light * rim;
+        value += (235 - value) * sheen * 0.5;
+        outRgb[c] = value + (logoColor[c] * light - value) * m;
+      }
+    };
+    const shadeWall = (u, v, s, outRgb) => {
+      const n = normal(u, v);
+      const lambert = Math.max(0, n[0] * wallLight[0] + n[1] * wallLight[1]);
+      if (s < fabricEdge) {
+        for (let c = 0; c < 3; c++) outRgb[c] = base[c] * (0.42 + 0.2 * lambert);
+        return;
+      }
+      const depth = (s - fabricEdge) / (1 - fabricEdge);
+      const gain = (0.8 + 0.9 * lambert) * (1 - 0.45 * depth) * (1 + 0.5 * nearest(fine, u * 3 + s * 40, v * 3, 0.5) * 0.3);
+      for (let c = 0; c < 3; c++) outRgb[c] = foam[c] * gain;
+    };
+
+    // 5. Chizish: har bir piksel ichida n×n namuna (silliq chet), har bir namuna uchun nur gilamcha ustiga yoki yon
+    //    devoriga tushadi
+    const n = o.samples ?? 4;
+    const out = new Uint8ClampedArray(W * H * 4);
+    const rgb = [0, 0, 0];
+    const reach = Math.hypot(...project(invBottom, W / 2, H / 2).map((value, i) => value - project(invTop, W / 2, H / 2)[i])) + 2;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const [uc, vc] = project(invTop, x + 0.5, y + 0.5);
+        const dc = sdf(uc, vc);
+        if (dc > reach * 2 + 4) continue; // gilamchadan uzoq
+        let r = 0, g = 0, b = 0, hits = 0;
+        for (let j = 0; j < n; j++) {
+          for (let i = 0; i < n; i++) {
+            const sx = x + (i + 0.5) / n;
+            const sy = y + (j + 0.5) / n;
+            const [u, v] = project(invTop, sx, sy);
+            const d = sdf(u, v);
+            if (d <= 0) {
+              shadeTop(u, v, -d, rgb);
+            } else {
+              if (d > reach * 2) continue;
+              const [ub, vb] = project(invBottom, sx, sy);
+              // nur qalinlik ichida (u,v) dan (ub,vb) gacha yuradi: gilamcha ichiga birinchi kirgan joy — yon devor
+              let enter = -1;
+              let before = 0;
+              for (let step = 1; step <= 12; step++) {
+                const s = step / 12;
+                if (sdf(u + (ub - u) * s, v + (vb - v) * s) <= 0) {
+                  let lo = before, hi = s;
+                  for (let it = 0; it < 9; it++) {
+                    const midS = (lo + hi) / 2;
+                    if (sdf(u + (ub - u) * midS, v + (vb - v) * midS) <= 0) hi = midS; else lo = midS;
+                  }
+                  enter = hi;
+                  break;
+                }
+                before = s;
+              }
+              if (enter < 0) continue;
+              shadeWall(u + (ub - u) * enter, v + (vb - v) * enter, enter, rgb);
+            }
+            r += rgb[0]; g += rgb[1]; b += rgb[2];
+            hits++;
+          }
+        }
+        if (!hits) continue;
+        const p = (y * W + x) * 4;
+        out[p] = r / hits;
+        out[p + 1] = g / hits;
+        out[p + 2] = b / hits;
+        out[p + 3] = Math.round((hits / (n * n)) * 255);
+      }
+    }
+
+    const result = document.createElement('canvas');
+    result.width = W;
+    result.height = H;
+    result.getContext('2d').putImageData(new ImageData(out, W, H), 0, 0);
+    stats.size = [W, H];
+
+    const ps = Math.min(1, (o.previewSize || 900) / Math.max(W, H));
+    const preview = document.createElement('canvas');
+    preview.width = Math.round(W * ps) + 60;
+    preview.height = Math.round(H * ps) + 60 + (logo?.canvas ? Math.round((logo.lh * (preview.width - 60)) / logo.lw) + 20 : 0);
+    const vctx = preview.getContext('2d');
+    vctx.fillStyle = o.previewBg || '#121216';
+    vctx.fillRect(0, 0, preview.width, preview.height);
+    vctx.imageSmoothingQuality = 'high';
+    vctx.drawImage(result, 30, 30, Math.round(W * ps), Math.round(H * ps));
+    // tekshirish uchun: suratdan ajratib olingan logotip niqobi (pastda)
+    if (logo?.canvas) vctx.drawImage(logo.canvas, 30, Math.round(H * ps) + 50, preview.width - 60, Math.round((logo.lh * (preview.width - 60)) / logo.lw));
+    window.__cutResult = result;
+    return JSON.stringify({ stats, preview: o.debug ? await toBase64(preview, 'image/jpeg', 0.92) : null });
+  }
+
   // Oxirgi kesilgan rasmni saytga tayyorlaydi: uzun tomoni `edge` pikseldan oshmaydigan WebP
   async function webp(edge, quality) {
     const src = window.__cutResult;
@@ -901,5 +1327,5 @@
     return JSON.stringify({ data: await toBase64(canvas, 'image/webp', quality), size: canvas.width + '×' + canvas.height });
   }
 
-  window.CUT = { white: cut, outline: cutOutline, webp };
+  window.CUT = { white: cut, outline: cutOutline, pad: renderPad, webp };
 })();

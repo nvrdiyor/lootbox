@@ -66,15 +66,19 @@ saytda alohida tovar — jami 17 ta. Nomi, narxi va tavsifi o‘sha yerdagidek, 
 ochadi. Ro‘yxat `server/db/catalog-data.js` faylida turadi.
 
 **Rasmlar — faqat tovarning o‘zi, orqa fonsiz.** Uzum’dagi dizaynli kartochka-rasmlar saytga qo‘yilmaydi.
-Rasmlar ikki xil manbadan olingan:
+Rasmlar uch xil yo‘l bilan tayyorlangan:
 
-- **Internetdan topilgan toza suratlar** (oq fonli, yirik) — 12 ta tovar: switchlar, universal va model-glaydlar,
-  oq va qora grip stiker (sichqonchasi bilan). Ularning foni olib tashlangan.
-- **Uzum’dagi o‘z e’lon rasmlaringizdan kesilgan** — 5 ta tovar: KDA va Printstream grip stikerlar (bu dizaynlarning
-  toza suratini internetdan topib bo‘lmadi) va ARCANE gilamchalar (internetda faqat boshqa brend logotipi tushgan
-  asl gilamchaning rasmlari bor).
+- **Internetdan topilgan toza suratlar** (oq fonli, yirik) — 10 ta tovar: switchlar, universal va model-glaydlar.
+  Ularning foni olib tashlangan.
+- **Uzum’dagi o‘z e’lon rasmlaringizdan kesilgan** — 5 ta tovar: hamma grip stikerlar (oq, qora, KDA oq va qora,
+  Printstream), sichqonchasi bilan. Internetdagi suratlarda bu stikerlar sichqonchaga to‘liq yopishtirilmagan
+  (o‘rtasi ochiq) yoki umuman yo‘q, sizning rasmlaringizda esa sichqoncha to‘liq o‘ralgan.
+- **Qayta chizilgan** — 2 ta tovar: ARCANE gilamchalar. Internetda faqat boshqa brend logotipi tushgan asl
+  gilamchaning rasmlari bor, plakatdan kesilgan bo‘lak esa xira chiqadi. Shuning uchun gilamcha o‘z o‘lchami
+  (450×400×6 mm) va plakatingizdagi ko‘rinish burchagida toza chizilgan, logotipi esa e’loningizdagi haqiqiy
+  suratdan («REAL FOTO») ko‘chirilgan.
 
-Har bir rasm qaysi sahifadan olingani va qanday kesilgani `scripts/cutouts/specs.js` da yozilgan. Tayyor fayllar
+Har bir rasm qaysi sahifadan olingani va qanday tayyorlangani `scripts/cutouts/specs.js` da yozilgan. Tayyor fayllar
 `server/db/catalog-media/` papkasida. Sayt fonsiz rasmni o‘zi taniydi va uni kartochka foni ustida, soya va
 yorug‘lik bilan, 3D sahnada ko‘rsatadi.
 
@@ -97,8 +101,9 @@ tovarga tegilmaydi.
 npm run cutouts
 ```
 
-Rasmlarni manbalaridan qaytadan yasaydi: manba suratni yuklab oladi va fonidan ajratadi (internet va kompyuterda
-Chrome kerak). Qaysi rasmdan va qanday kesilishi `scripts/cutouts/specs.js` da yozilgan. Yangi tovar qo‘shilganda,
+Rasmlarni manbalaridan qaytadan yasaydi: manba suratni yuklab oladi va fonidan ajratadi, gilamchani esa qaytadan
+chizadi (internet va kompyuterda Chrome kerak). Qaysi rasmdan va qanday kesilishi `scripts/cutouts/specs.js` da
+yozilgan — gilamcha rangi ham o‘sha yerda (`color`). Yangi tovar qo‘shilganda,
 manba almashtirilganda yoki kesim yoqmaganda kerak bo‘ladi. Bitta rasmni yozmasdan tekshirib ko‘rish:
 `npm run cutouts -- --check grip-oq` (natija `data/shots/` papkasida).
 

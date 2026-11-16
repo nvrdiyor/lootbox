@@ -59,6 +59,31 @@ ok(
   })),
   'katalog: har bir tovar uchun fonsiz rasm va kichik nusxasi loyihada bor',
 );
+// Rasmlarni qayta yasash ta'riflari (npm run cutouts) katalogdagi rasm nomlari bilan bir xil bo'lishi kerak: bittasi
+// unutilsa, o'sha rasm qayta yasalmaydi yoki ta'rif "yetim" bo'lib qoladi
+const { SPECS } = await import('./cutouts/specs.js');
+eq(Object.keys(SPECS).sort().join(','), [...new Set(mediaNames)].sort().join(','), 'kesim: har bir katalog rasmi uchun ta’rif bor, ortiqchasi yo‘q');
+ok(
+  Object.values(SPECS).every((spec) =>
+    typeof spec.source === 'string'
+      ? /^[a-z0-9]{16,32}$/.test(spec.source)
+      : /^https:\/\//.test(spec.source?.url || '') && /^https:\/\//.test(spec.source?.page || ''),
+  ),
+  'kesim: har bir ta’rifda manba ko‘rsatilgan (Uzum identifikatori yoki rasm va sahifa manzili)',
+);
+// Do'kon egasi rad etganlari qaytib kelmasin: internetdagi suratlarda grip stiker sichqonchani to'liq o'ramagan,
+// plakatdan kesilgan gilamcha esa xira edi
+ok(
+  ['grip-oq', 'grip-qora'].every((name) => typeof SPECS[name]?.source === 'string' && SPECS[name].outline?.length > 20),
+  'kesim: oq va qora grip stiker o‘z plakatimizdan olinadi (sichqoncha to‘liq o‘ralgan ko‘rinish)',
+);
+ok(
+  ['arcane-qizil', 'arcane-qora'].every((name) => {
+    const spec = SPECS[name] || {};
+    return spec.render === 'pad' && spec.view?.length === 4 && spec.size?.length === 3 && spec.color?.length === 3 && spec.logo?.points?.length >= 4;
+  }),
+  'kesim: gilamcha plakatdan kesilmaydi, qayta chiziladi (ko‘rinish, o‘lcham, rang va logotip nuqtalari berilgan)',
+);
 ok(seeded.every((item) => item.images.length >= 1 && item.images.every((image) => image.cutout)), 'katalog: birinchi ishga tushirishda tovarlarga fonsiz rasmlar biriktiriladi');
 const mediaAgain = catalog.importCatalogMedia();
 ok(mediaAgain.images === 0 && mediaAgain.skipped === CATALOG_PRODUCTS.length, 'katalog: rasmi bor tovarga qayta biriktirilmaydi');

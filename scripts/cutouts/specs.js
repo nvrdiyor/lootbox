@@ -11,8 +11,8 @@
 //       admin paneldan yuklang yoki shu yerda manbani almashtiring.
 //   'identifikator' — Uzum'dagi o'z e'lonimiz rasmi (images.uzum.uz/<id>/original.jpg).
 //
-// USUL: `outline` berilmasa — oq fon usuli (CUT.white), berilsa — kontur usuli (CUT.outline). Koordinatalar har doim
-// asl rasm piksellarida.
+// USUL: `outline` berilmasa — oq fon usuli (CUT.white), berilsa — kontur usuli (CUT.outline); `render: 'pad'` —
+// gilamcha kesilmaydi, qayta chiziladi (CUT.pad). Koordinatalar har doim asl rasm piksellarida.
 //
 // Oq fon usuli:
 //   T            fon rangidan qancha farq qilsa ham "fon" hisoblanadi (odatda 12; yumshoq soyani olib tashlash uchun kattaroq)
@@ -43,25 +43,83 @@
 //   desat        [{ hue: [dan, gacha], amount }] — fon yorug'ligidan qolgan rangli tusni yo'qotadi (hue berilmasa — hammasi)
 //   strip…       tekshiruv tasmasi sozlamalari (--check): stripRange, stripRows, stripLevels
 //
+// Qayta chizish (render: 'pad'):
+//   size         [eni, bo'yi, qalinligi] — gilamcha o'lchami, mm;  radius — burchak radiusi, mm
+//   view         [[x, y] × 4] — gilamcha qaysi burchakdan ko'rinishi: namuna rasmdagi to'rt burchagi
+//                (chap-yuqori, o'ng-yuqori, o'ng-past, chap-past); kamera shundan tiklanadi
+//   color        mato rangi [r, g, b];  logoColor — logotip rangi;  foam — yon tomondagi ko'pik asos rangi
+//   logo         { points, box } — logotip manba suratdan ko'chiriladi: points — [surat x, y, gilamchadagi u, v (mm)]
+//                tayanch nuqtalari (kamida 4 ta), box — logotip egallagan joy [u0, v0, u1, v1], mm
+//   shade        { grain, weave, cloud, light, lightDir, sheen, rim } — mato doni va yorug'lik (odatda kerak emas)
+//   width        natija kengligi, piksel (odatda 1400)
+//
+// Hamma usul uchun:
+//   quality      [to'liq, kichik] — WebP sifati (odatda 0.9 va 0.86). Bir tekis to'q sirtli rasmda (gilamcha) odatdagi
+//                siqish kvadrat dog'lar qoldiradi — unga yuqoriroq sifat beriladi.
+//
 // Tekshiruv tasmasi (--check) kesish chizig'i bo'ylab "yoyilgan" rasm: o'rtadagi chiziq — kesim, tepasi — tashqari,
 // pasti — ichkari. Buyum cheti chiziqdan qancha yuqori yoki pastda ko'rinsa, o'sha nuqtaga shuncha siljish beriladi.
 
 const web = (url, page) => ({ url, page });
 
-// Gilamcha konturi: taxminiy kontur chekkaga tortilgach, to‘rt qirrasiga to‘g‘ri chiziq mos keltirilgan va
-// burchaklari yumaloqlangan (hamma nuqta aniq).
-const PAD_OUTLINE = [
-  [172.7, 999.4, 1], [169.9, 990.7, 1], [169.5, 983.2, 1], [171.3, 976.8, 1], [175.3, 971.6, 1],
-  [181.6, 967.4, 1], [190.2, 964.4, 1], [248.4, 949.9, 1], [355.1, 923.1, 1], [461.8, 896.4, 1],
-  [568.5, 869.6, 1], [675.2, 842.9, 1], [781.9, 816.2, 1], [888.6, 789.4, 1], [934.8, 777.9, 1],
-  [944.2, 776.3, 1], [953, 776.5, 1], [961.2, 778.4, 1], [968.7, 782, 1], [975.7, 787.3, 1],
-  [982.1, 794.4, 1], [1018.4, 842.2, 1], [1085, 929.7, 1], [1151.7, 1017.2, 1], [1218.3, 1104.8, 1],
-  [1284.9, 1192.3, 1], [1316.4, 1233.7, 1], [1321.2, 1241.2, 1], [1323.4, 1247.9, 1], [1322.9, 1253.8, 1],
-  [1319.9, 1258.9, 1], [1314.2, 1263.1, 1], [1306, 1266.4, 1], [1248.6, 1284.1, 1], [1143.5, 1316.6, 1],
-  [1038.4, 1349, 1], [933.3, 1381.5, 1], [828.2, 1413.9, 1], [723.1, 1446.4, 1], [618, 1478.8, 1],
-  [512.9, 1511.3, 1], [430.1, 1536.9, 1], [421, 1538.8, 1], [412.9, 1538.7, 1], [405.7, 1536.6, 1],
-  [399.4, 1532.4, 1], [394.2, 1526.2, 1], [389.8, 1518, 1], [366.6, 1462.7, 1], [324.2, 1361.2, 1],
-  [281.7, 1259.8, 1], [239.2, 1158.3, 1], [196.7, 1056.8, 1],
+// Gilamcha kesilmaydi, qayta chiziladi (CUT.pad). Internetda faqat asl brend (boshqa logotipli) rasmlari bor, Uzum’dagi
+// plakatimizdan kesilgan bo‘lak esa xira va dog‘li chiqdi — do‘kon egasi uni rad etdi. Gilamcha tekis buyum: o‘z o‘lchami
+// (450 × 400 × 6 mm), plakatdagi ko‘rinish burchagi (view — birinchi plakatdagi gilamchaning to‘rt burchagi) va egasining
+// haqiqiy suratidan ko‘chirilgan logotip bilan toza chiziladi. Manba — o‘sha haqiqiy surat (e’londagi «REAL FOTO»).
+// logo.points: [suratdagi x, y, gilamchadagi u, v (mm)] — logotipning tayanch nuqtalari; u, v tepadan ko‘rinishdagi
+// plakatdan (ikkinchi rasm) o‘lchangan.
+const PAD = {
+  render: 'pad',
+  quality: [0.99, 0.98],
+  size: [450, 400, 6],
+  radius: 15.5,
+  view: [[161.1, 971.8], [963.8, 770.5], [1334.6, 1257.6], [401.4, 1545.7]],
+  logo: {
+    box: [356, 371, 438, 392],
+    points: [
+      [108, 952, 359.8, 381.1], // strelka uchi
+      [356, 840, 378.4, 374.2], // strelkaning yuqori qanoti
+      [328, 1000.8, 376.3, 386.1], // strelkaning pastki qanoti
+      [388, 882, 380.7, 377.4], // birinchi «A» ning uchi
+      [340, 974, 377.4, 383.8], // birinchi «A» ning chap oyog‘i
+      [814.8, 850, 415.2, 377], // «E» ustunining tepasi
+      [816, 933.2, 415.2, 383.7], // «E» ustunining pasti
+      [590, 1016, 396, 388.8], // pastki yozuvning boshi
+      [1080, 976.8, 434.3, 388.8], // pastki yozuvning oxiri
+    ],
+  },
+};
+
+// Oq va qora grip stiker konturi. Oq plakatda (oq sichqoncha to‘q fonda) chekka avtomatik topilgan ('r' usuli, ikki
+// o‘tishda: «STIKER» yozuvi sichqonchaga yaqin kelgan joyda qidiruv oralig‘i toraytirilgan), so‘ng aniq nuqtalarga
+// aylantirilgan: qora plakatda qora sichqoncha to‘q fonda ko‘rinmaydi, joylashuvi esa oq plakatdagi bilan bir xil.
+const GRIP_OUTLINE = [
+  [42.5, 891.1, 1], [41.5, 886.4, 1], [41.2, 882.2, 1], [41.1, 874.6, 1], [41.7, 868.6, 1], [42.6, 864.7, 1],
+  [49.5, 843.3, 1], [56.4, 827.3, 1], [67.4, 802.3, 1], [79.2, 778.3, 1], [91.9, 754.8, 1], [104.8, 731.3, 1],
+  [115.8, 713.6, 1], [130, 691.3, 1], [142.2, 671.9, 1], [156.8, 650.4, 1], [167.8, 634, 1], [183.7, 611.9, 1],
+  [199.5, 589.6, 1], [215.4, 567.4, 1], [227.1, 552.2, 1], [242, 532.9, 1], [259, 512, 1], [268, 502, 1],
+  [285.7, 482.1, 1], [302.3, 463.9, 1], [318.4, 447.6, 1], [336.7, 430.2, 1], [353.6, 414.4, 1], [373.5, 396.6, 1],
+  [389.1, 382.5, 1], [405.8, 367.8, 1], [422.5, 353.9, 1], [432, 346.8, 1], [439.9, 340.1, 1], [444.7, 336.6, 1],
+  [453.8, 330.8, 1], [460.6, 325.1, 1], [467.7, 320.6, 1], [486.8, 308.3, 1], [507.9, 295.8, 1], [523.7, 287.9, 1],
+  [546.4, 277, 1], [565.3, 269.3, 1], [590.3, 260.2, 1], [616.3, 252.3, 1], [629.6, 249.1, 1], [656.6, 244.2, 1],
+  [677.7, 240.8, 1], [696.5, 239.3, 1], [722.5, 239.1, 1], [748.7, 240.4, 1], [767.2, 242.3, 1], [782.5, 244.3, 1],
+  [807.8, 250.7, 1], [834, 258.8, 1], [849.4, 264.8, 1], [874.4, 275.6, 1], [891.9, 284.9, 1], [914.1, 299, 1],
+  [926.2, 308.1, 1], [941.8, 319.9, 1], [949.8, 327.2, 1], [969.1, 346.4, 1], [979.3, 357.3, 1], [991.6, 373.5, 1],
+  [1005.5, 395.2, 1], [1017.5, 416, 1], [1025.8, 433.6, 1], [1035.2, 458.4, 1], [1042.3, 482.3, 1], [1046.5, 500.6, 1],
+  [1051.3, 520.9, 1], [1052.5, 528.2, 1], [1052.8, 537.1, 1], [1052.9, 558.6, 1], [1051, 576.8, 1], [1047.4, 596.1, 1],
+  [1043.8, 611.1, 1], [1039.4, 624.1, 1], [1032.3, 640.9, 1], [1022.5, 659, 1], [1016.8, 667.7, 1], [1002.8, 686.5, 1],
+  [994.9, 695.6, 1], [981.3, 708.9, 1], [971.9, 717.6, 1], [965.5, 724.2, 1], [961.4, 727.2, 1], [949.4, 736.7, 1],
+  [929.2, 753, 1], [913, 765.7, 1], [905.3, 772.8, 1], [900.8, 776.1, 1], [888.1, 786.2, 1], [880.5, 793.4, 1],
+  [867, 806.6, 1], [853.7, 820.9, 1], [840.8, 837.2, 1], [824.9, 858.8, 1], [810.3, 881.2, 1], [798.2, 901.3, 1],
+  [784.1, 924.2, 1], [772.7, 943.7, 1], [758.2, 966.6, 1], [743.7, 988.6, 1], [729.7, 1008.8, 1], [715.9, 1027.3, 1],
+  [704.2, 1041.8, 1], [692.4, 1055.8, 1], [675.5, 1073.6, 1], [665.2, 1082.4, 1], [654.7, 1091.1, 1], [644.4, 1098.2, 1],
+  [626.8, 1107.5, 1], [610.1, 1115.3, 1], [597.6, 1119.4, 1], [576.6, 1124.3, 1], [558.7, 1127.1, 1], [532.3, 1129.5, 1],
+  [505.4, 1130.1, 1], [484.9, 1129.3, 1], [466.3, 1128.2, 1], [439, 1125.7, 1], [411.9, 1122.1, 1], [385.9, 1118.1, 1],
+  [372.5, 1115, 1], [364, 1112.3, 1], [346.8, 1105.6, 1], [332.2, 1101.3, 1], [305.8, 1093.9, 1], [279.5, 1085.9, 1],
+  [255.6, 1077.9, 1], [250.9, 1076.4, 1], [244.9, 1075.6, 1], [235.3, 1074.6, 1], [229.4, 1072.7, 1], [221.5, 1068.9, 1],
+  [196.9, 1056.5, 1], [174.3, 1043.1, 1], [156.9, 1032.1, 1], [140, 1019.9, 1], [119.6, 1004, 1], [108.8, 994.1, 1],
+  [102.4, 986.9, 1], [94.7, 978.3, 1], [83.7, 967.3, 1], [70.2, 950.1, 1], [63.5, 940.5, 1], [59.4, 932.7, 1],
+  [55.3, 924.1, 1], [53.7, 918.8, 1], [51.3, 908.7, 1], [49.5, 904.4, 1], [44.6, 895.9, 1],
 ];
 
 // Model-glaydlar: oq fonda oq buyum — fon chegarasi tor, ichidagi yopiq fon (sensor halqasi teshigi) ham olib tashlanadi
@@ -94,27 +152,9 @@ export const SPECS = {
     ),
   },
 
-  // Gilamcha: internetda faqat asl brend (boshqa logotipli) rasmlari bor, shuning uchun Uzum’dagi o‘z rasmimizdan.
-  // Qizil va qora plakatda joylashuvi bir xil — kontur bitta (PAD_OUTLINE).
-  'arcane-qizil': {
-    source: 'dblnigrgc6hc739aur20',
-    crop: [90, 690, 1320, 950],
-    snap: false,
-    inset: 0,
-    stripRows: 2,
-    stripRange: 24,
-    outline: PAD_OUTLINE,
-  },
-  'arcane-qora': {
-    source: 'dblnibjgc6hc739auqv0',
-    crop: [90, 690, 1320, 950],
-    snap: false,
-    inset: 0,
-    stripRows: 2,
-    stripRange: 24,
-    stripLevels: [0, 90],
-    outline: PAD_OUTLINE,
-  },
+  // Gilamcha: qayta chiziladi (yuqoridagi PAD). Ikki rang faqat mato rangi bilan farq qiladi.
+  'arcane-qizil': { source: 'dblnikf53nls73a0rfsg', ...PAD, color: [171, 41, 30] },
+  'arcane-qora': { source: 'dblnikf53nls73a0rfsg', ...PAD, color: [26, 31, 41], logoColor: [226, 229, 236] },
 
   // Universal nuqta-glaydlar. Qorasi: varaqdagi 20 ta nuqtaning o‘zi (varaqda boshqa brend yozuvi bor) — aniq doiralar.
   // Oqi: 20 ta nuqta o‘z varag‘i bilan (rasm kichik, shuning uchun 2 barobar kattalashtiriladi).
@@ -173,53 +213,34 @@ export const SPECS = {
     ...FEETGLIDE,
   },
 
-  // Grip stikerlar sichqonchasi bilan. Qorasida sichqoncha ustiga kattalashtirish belgisi tushgan: belgi kesib
-  // tashlanadi (drop), sichqonchaga tushgan qismi esa chet bo‘ylab to‘ldiriladi (patches).
+  // Oq va qora grip stiker sichqonchasi bilan. Internetdagi toza suratlarda to‘plamning faqat bir qismi yopishtirilgan
+  // (sichqonchaning o‘rtasi ochiq) — do‘kon egasi buni rad etdi: stiker sichqonchani to‘liq o‘raydi. To‘liq o‘ralgan
+  // ko‘rinish Uzum’dagi o‘z plakatlarimizda bor, shuning uchun shulardan kontur bo‘yicha kesiladi. Ikkala plakatda
+  // sichqoncha bir xil joylashgan — kontur bitta (GRIP_OUTLINE). Orqa tomondagi qizil yorug‘lik tusi olib tashlanadi.
   'grip-qora': {
-    source: web(
-      'https://m.media-amazon.com/images/I/71qvFHiq0cL._AC_SL1500_.jpg',
-      'https://www.amazon.de/JINGDU-kompatibel-Anti-Rutsch-Maus-Aufkleber-Griff-Aufkleber-AC-SchwarzX/dp/B0BYVKDLYC',
-    ),
-    crop: [230, 440, 1270, 880],
-    T: 14,
-    keepLargest: 1,
-    patches: [{ poly: [[342.5, 1108.5], [475, 1097], [419.5, 1187.5]], dir: [1, 1.017], margin: 3 }],
-    drop: [[[340, 1105.5], [342.5, 1108.5], [380.5, 1147.5], [419.5, 1187.5], [422, 1192], [404, 1206], [322, 1122]]],
+    source: 'dauhakj4kamtgrh4i7tg',
+    crop: [0, 180, 1086, 1020],
+    snap: false,
+    inset: 0,
+    stripRows: 3,
+    stripRange: 16,
+    stripLevels: [0, 70],
+    outline: GRIP_OUTLINE,
+    desat: [{ hue: [300, 45], amount: 1, feather: 25 }],
   },
-
-  // Oq sichqoncha oq fonda, ostida soya bor: avtomatik usul ishlamaydi — kontur qo‘lda, soya tomoni aniq nuqtalar bilan
   'grip-oq': {
-    source: web(
-      'https://m.media-amazon.com/images/I/71YvHd6sp0L.jpg',
-      'https://www.amazon.com/JINGDU-Compatible-Superlight-Sweat-Proof-Protective/dp/B0BYPBSLYV',
-    ),
-    stripLevels: [170, 255],
-    crop: [150, 340, 1450, 1240],
-    snapMode: 'grad',
-    snapThr: 5,
-    snapIn: 44,
-    snapOut: 6,
-    outline: [
-      [277, 950, 'd'], [300, 921, 'd'], [325, 893, 'd'], [350, 866, 'd'], [375, 841, 'd'], [400, 817, 'd'],
-      [425, 794, 'd'], [450, 772, 'd'], [475, 753, 'd'], [500, 734, 'd'], [525, 715, 'd'], [550, 697, 'd'],
-      [575, 677, 'd'], [600, 657, 'd'], [625, 637, 'd'], [650, 618, 'd'], [665, 606, 'd'], [700, 583, 'd'],
-      [750, 548, 'd'], [800, 515, 'd'], [850, 486, 'd'], [900, 463, 'd'], [948, 432], [999, 414], [1050, 402],
-      [1100, 394], [1150, 392], [1201, 396], [1252, 404], [1303, 417], [1354, 437], [1405, 468], [1456, 514],
-      [1487, 556], [1508, 597], [1520, 649], [1524, 700], [1520, 752], [1508, 803], [1487, 854], [1462, 912],
-      [1432, 958], [1404, 978], [1354, 1026], [1304, 1072], [1254, 1114], [1204, 1154], [1154, 1192],
-      [1104, 1229], [1054, 1266], [1004, 1304], [954, 1344], [904, 1379], [854, 1412], [804, 1441],
-      [740, 1472, 1], [700, 1483, 1], [667, 1489, 1], [633, 1492, 1], [600, 1488, 1], [570, 1482, 1],
-      [550, 1472, 1], [525, 1464, 1, -3], [500, 1455, 1, -3], [475, 1443, 1, -3], [450, 1429, 1, -3],
-      [424, 1415, 1, -3], [399, 1400, 1, -3], [374, 1382, 1, -3], [350, 1362, 1, -3], [337, 1350, 1, -3],
-      [318, 1332, 1, -3], [300, 1312, 1, -3], [290, 1300, 1, -3], [272, 1275, 1, -3], [256, 1250, 1, -3],
-      [242, 1226, 1, -3], [232, 1200, 1, -2], [228, 1178, 1, -2], [225, 1150, 1, -2], [225, 1123, 1, -2],
-      [226.5, 1100, 1, -2], [231, 1067, 1, -2], [237.5, 1039, 1, -2], [242, 1000, 1], [249, 987, 1],
-      [260, 975, 1],
-    ],
+    source: 'dauhamr4kamtgrh4i7ug',
+    crop: [0, 180, 1086, 1020],
+    snap: false,
+    inset: 0,
+    stripRows: 3,
+    stripRange: 16,
+    outline: GRIP_OUTLINE,
+    desat: [{ hue: [300, 45], amount: 1, feather: 25 }],
   },
 
-  // KDA va Printstream: bu dizaynlarning toza fonli rasmi internetda topilmadi — Uzum’dagi o‘z plakatlarimizdan,
-  // kontur bo‘yicha. Neon fondan qolgan rangli tus olib tashlanadi (desat).
+  // KDA va Printstream: bu dizaynlarning toza fonli rasmi internetda topilmadi — bular ham Uzum’dagi o‘z
+  // plakatlarimizdan, kontur bo‘yicha. Neon fondan qolgan rangli tus olib tashlanadi (desat).
   'grip-kda-oq': {
     source: 'dbehunrsr4js73fsgogg',
     crop: [120, 660, 1560, 1420],

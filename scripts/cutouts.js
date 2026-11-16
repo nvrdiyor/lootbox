@@ -76,7 +76,7 @@ try {
     try {
       const { source, ...options } = SPECS[name];
       await chrome.run(`window.__src = ${JSON.stringify(await load(source))}; true`);
-      const method = options.outline ? 'outline' : 'white';
+      const method = options.render === 'pad' ? 'pad' : options.outline ? 'outline' : 'white';
       const reply = JSON.parse(await chrome.run(`CUT.${method}(window.__src, ${JSON.stringify({ ...options, debug: checkMode })})`));
 
       if (checkMode) {
@@ -91,9 +91,12 @@ try {
         continue;
       }
 
-      // Saytga tayyorlash: admin paneldagi yuklagich bilan bir xil qoida (WebP, kichik nusxa 800 px gacha)
-      const full = JSON.parse(await chrome.run('CUT.webp(1400, 0.9)'));
-      const thumb = JSON.parse(await chrome.run('CUT.webp(800, 0.86)'));
+      // Saytga tayyorlash: admin paneldagi yuklagich bilan bir xil qoida (WebP, kichik nusxa 800 px gacha).
+      // `quality: [to'liq, kichik]` — bir tekis to'q sirtli rasmlar (gilamcha) uchun: odatdagi siqishda ularda
+      // kvadrat dog'lar paydo bo'ladi.
+      const [qFull, qThumb] = (options.quality || [0.9, 0.86]).map(Number);
+      const full = JSON.parse(await chrome.run(`CUT.webp(1400, ${qFull})`));
+      const thumb = JSON.parse(await chrome.run(`CUT.webp(800, ${qThumb})`));
       fs.writeFileSync(path.join(OUT, `${name}.webp`), Buffer.from(full.data, 'base64'));
       fs.writeFileSync(path.join(OUT, `${name}.t.webp`), Buffer.from(thumb.data, 'base64'));
       console.log(`  ${name}: ${full.size}, ${Math.round(fs.statSync(path.join(OUT, `${name}.webp`)).size / 1024)} KB`);
