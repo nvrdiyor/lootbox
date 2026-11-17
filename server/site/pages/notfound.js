@@ -7,6 +7,7 @@ export function notFoundPage(ctx) {
   return page(ctx, {
     title: `${t.notFound.title} — ${brand.name}`,
     pageName: 'lost',
+    noindex: true,
     body: html`<section class="lost">
       <div class="wrap">
         <p class="lost__code" aria-hidden="true">404</p>

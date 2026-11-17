@@ -132,6 +132,62 @@ export default {
     catalog: 'Katalogga',
   },
 
+  // Qidiruv tizimlari uchun matnlar (server/site/seo.js shulardan sahifa sarlavhasi va tavsifini tuzadi).
+  // groups — tovar turlari: tur kategoriya yoki tovar nomidan taniladi. Har biri uchun:
+  //   terms — odamlar shu narsani qanday nomlar bilan qidirishi (sahifada «Boshqa nomlari» qatorida ko'rinadi;
+  //           eng ko'p ishlatiladigani oldinda: so'zlashuvdagi o'zbekcha, inglizcha, ruscha);
+  //   more  — faqat qidiruv tizimlariga beriladigan qo'shimcha yozilishlar;
+  //   item  — tovar sahifasi sarlavhasiga qo'shiladigan ibora;  short — kategoriya sarlavhasidagi qavs ichi;
+  //   ru    — tavsif oxiriga qo'shiladigan ruscha nom;  intro — kategoriya sahifasidagi kirish matni.
+  // Admin panelda tovar yoki kategoriyaga o'z «qidiruv so'zlari» yozilsa, shu ro'yxat o'rniga o'sha ishlatiladi.
+  seo: {
+    also: 'Boshqa nomlari',
+    price: (amount) => `Narxi ${amount} so‘m`,
+    priceFrom: (amount) => `narxi ${amount} so‘mdan`,
+    kinds: (n) => `${n} xil tovar`,
+    viaUzum: 'O‘zbekiston bo‘ylab Uzum Market orqali yetkazib beriladi',
+    prices: 'narxlari',
+    catalogOf: (brand) => `${brand} katalogi`,
+    groups: {
+      skates: {
+        terms: ['skeytlar', 'mouse skates', 'скейты для мыши', 'глайды для мыши', 'sichqoncha oyoqchalari'],
+        more: ['skeyt', 'skate', 'glides', 'PTFE feet', 'тефлоновые ножки для мыши', 'сичқонча скейти'],
+        item: 'sichqoncha skeytlari',
+        short: 'skeytlar, mouse skates',
+        ru: 'Скейты (глайды) для мыши',
+        intro:
+          'Glayd (skeyt, inglizcha mouse skates) — sichqoncha tagiga yopishtiriladigan teflon (PTFE) oyoqcha. Yeyilgan zavod oyoqchalarini almashtirsangiz, sichqoncha gilamcha ustida yana yengil va bir tekis sirpanadi. Logitech va Razer modellari uchun tayyor to‘plamlar hamda istalgan sichqonchaga mos universal nuqta-glaydlar bor.',
+      },
+      switches: {
+        terms: ['svitchlar', 'keyboard switches', 'свитчи для клавиатуры', 'переключатели для механической клавиатуры', 'mexanik klaviatura svitchlari'],
+        more: ['svitch', 'switch', 'linear', 'tactile', 'clicky', 'hot-swap', 'свитчи', 'клавиатура свитчлари'],
+        item: 'mexanik klaviatura svitchlari',
+        short: 'svitchlar, keyboard switches',
+        ru: 'Свитчи (переключатели) для механической клавиатуры',
+        intro:
+          'Switch (svitch) — mexanik klaviaturada har bir tugma ostidagi mexanizm: bosish hissi va ovozi shunga bog‘liq. Linear switchlar silliq va jim, tactile — yengil «bump» bilan, clicky — aniq «klik» ovozi bilan bosiladi. Hot-swap klaviaturada ular lehimsiz almashtiriladi.',
+      },
+      pads: {
+        terms: ['kovrik', 'mousepad', 'коврик для мыши', 'игровой коврик', 'sichqoncha gilamchasi'],
+        more: ['kovriklar', 'mouse pad', 'gaming kovrik', 'коврик для мышки', 'сичқонча гиламчаси'],
+        item: 'kovrik (mousepad)',
+        short: 'kovriklar, mousepad',
+        ru: 'Игровой коврик для мыши',
+        intro:
+          'Gilamcha (kovrik, mousepad) — sichqoncha uchun to‘shama: sensor aniqroq ishlaydi, sichqoncha bir tekis sirpanadi, bilak esa charchamaydi. O‘yin uchun keng maydonli, qalin va qirralari tikilmagan gilamchalar.',
+      },
+      grips: {
+        terms: ['grip lenta', 'grip tape', 'грипсы для мыши', 'грип-лента', 'sichqoncha stikeri'],
+        more: ['grip', 'grips', 'antislip stiker', 'наклейки на мышь', 'грип стикер'],
+        item: 'sichqoncha uchun grip lenta',
+        short: 'grip lenta, grip tape',
+        ru: 'Грипсы (грип-лента) для мыши',
+        intro:
+          'Grip stiker (grip lenta) — sichqoncha yuzasiga yopishtiriladigan, sirpanishga qarshi qoplama. Qo‘l terlaganda ham sichqoncha kaftdan sirpanmaydi, korpus esa tirnalishdan saqlanadi. Bir necha xil dizayn bor.',
+      },
+    },
+  },
+
   cursor: { drag: 'Suring' },
 
   // Faqat admin panelga kirgan odamga ko'rinadi

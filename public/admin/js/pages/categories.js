@@ -39,6 +39,25 @@ if (dialog && form) {
     form.elements.name.value = category?.name || '';
     form.elements.tagline.value = category?.tagline || '';
     form.elements.slug.value = category?.slug || '';
+    // Qidiruv tizimlari uchun maydonlar: bo'sh bo'lsa sayt o'zi tuzadigan matn kulrang bo'lib ko'rinadi
+    const auto = category?.auto || {};
+    const seoValues = {
+      search_terms: [category?.search_terms, (auto.terms || []).join(', ')],
+      intro: [category?.intro, auto.intro],
+      meta_title: [category?.meta_title, auto.title],
+      meta_description: [category?.meta_description, auto.description],
+    };
+    let seoFilled = false;
+    for (const [name, [value, placeholder]] of Object.entries(seoValues)) {
+      const input = form.elements[name];
+      input.value = value || '';
+      if (placeholder) input.placeholder = placeholder;
+      else input.removeAttribute('placeholder');
+      input.dispatchEvent(new Event('input'));
+      if (value) seoFilled = true;
+    }
+    const seoDetails = $('[data-seo-details]', form);
+    if (seoDetails) seoDetails.open = seoFilled;
     form.elements.visible.checked = category ? Boolean(category.visible) : true;
     syncBrand();
     if (category) checkRadio(form, 'art', category.art);
@@ -64,6 +83,10 @@ if (dialog && form) {
       name: values.name,
       tagline: values.tagline,
       slug: values.slug,
+      search_terms: values.search_terms,
+      intro: values.intro,
+      meta_title: values.meta_title,
+      meta_description: values.meta_description,
       art: values.art || 'box',
       image_id: uploader.ids()[0] || null,
       visible: values.visible,

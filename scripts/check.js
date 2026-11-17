@@ -12,7 +12,7 @@ process.env.ADMIN_PASSWORD = `check-${crypto.randomBytes(9).toString('hex')}`;
 process.env.SITE_URL = '';
 process.env.TRUST_PROXY = '';
 
-const { closeDb, get } = await import('../server/db/index.js');
+const { closeDb, get, db } = await import('../server/db/index.js');
 const { seedIfEmpty } = await import('../server/db/seed.js');
 const repo = await import('../server/db/repo.js');
 const { createApp } = await import('../server/app.js');
@@ -204,6 +204,204 @@ const headers = (await request('/')).headers;
 ok((headers.get('content-security-policy') || '').includes("script-src 'self'"), 'xavfsizlik sarlavhasi: CSP');
 eq(headers.get('x-frame-options'), 'DENY', 'xavfsizlik sarlavhasi: X-Frame-Options');
 eq(headers.get('x-content-type-options'), 'nosniff', 'xavfsizlik sarlavhasi: nosniff');
+
+// ---- Qidiruv tizimlari (SEO) -------------------------------------------------------
+// Har bir sahifaning o'z sarlavhasi, tavsifi va bitta asosiy sarlavhasi (h1) bo'lishi, odamlar qidiradigan so'zlar
+// (skeyt, kovrik, ruscha nomlar) sahifada turishi va qidiruv tizimi tushunadigan ma'lumot to'g'ri chiqishi kerak.
+const seoLib = await import('../server/site/seo.js');
+const { siteEntries } = await import('../server/site/sitemap.js');
+const validate = await import('../server/admin/validate.js');
+const { dictionary } = await import('../server/i18n/index.js');
+const unescapeHtml = (value) =>
+  value.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+function headOf(pageHtml) {
+  const pick = (pattern) => unescapeHtml((pageHtml.match(pattern) || [])[1] || '');
+  let ld = null;
+  try {
+    ld = JSON.parse((pageHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/) || [])[1] || 'null');
+  } catch {
+    ld = 'buzuq';
+  }
+  return {
+    title: pick(/<title>([^<]*)<\/title>/),
+    description: pick(/<meta name="description" content="([^"]*)"/),
+    keywords: pick(/<meta name="keywords" content="([^"]*)"/),
+    canonical: pick(/<link rel="canonical" href="([^"]*)"/),
+    robots: pick(/<meta name="robots" content="([^"]*)"/),
+    h1: (pageHtml.match(/<h1[\s>]/g) || []).length,
+    ld,
+  };
+}
+const ldNode = (head, type) => (head.ld?.['@graph'] || []).find((node) => node['@type'] === type);
+const headAt = async (url) => headOf(await (await request(url)).text());
+
+const entries = siteEntries();
+const heads = new Map();
+for (const entry of entries) {
+  const res = await request(entry.path);
+  heads.set(entry.path, { status: res.status, ...headOf(await res.text()) });
+}
+ok(entries.length >= CATALOG_PRODUCTS.length + 6, 'seo: sayt xaritasida hamma tovar, kategoriya va bosh sahifalar bor', `${entries.length} ta`);
+const flawed = [...heads].filter(
+  ([, head]) =>
+    head.status !== 200 || head.h1 !== 1 || !head.title || head.description.length < 50 || head.description.length > 300 || head.robots || !head.ld || head.ld === 'buzuq',
+);
+eq(flawed.map(([url]) => url).join(', '), '', 'seo: har bir sahifada sarlavha, tavsif, bitta h1 va tuzilgan ma’lumot bor');
+ok([...heads].every(([url, head]) => head.canonical === ORIGIN + url), 'seo: canonical — sahifaning o‘z manzili');
+eq(new Set([...heads.values()].map((head) => head.title)).size, heads.size, 'seo: sahifa sarlavhalari takrorlanmaydi');
+const productHeads = [...heads].filter(([url]) => url.startsWith('/tovar/')).map(([, head]) => head);
+eq(new Set(productHeads.map((head) => head.description)).size, productHeads.length, 'seo: tovar tavsiflari takrorlanmaydi (bir e’lonning variantlarida ham)');
+eq(new Set([...heads.values()].map((head) => head.description)).size, heads.size, 'seo: sahifa tavsiflari takrorlanmaydi (bosh sahifa va katalogniki ham har xil)');
+
+// Odamlar qidiradigan so'zlar avtomatik qo'yiladi (tovar turi kategoriya nomidan taniladi) va sahifada ko'rinadi
+const pad = repo.listProducts({ brand: 'lootbox', visibleOnly: true }).find((item) => item.category?.slug === 'gilamchalar');
+const padHtml = await (await request(`/tovar/${pad.slug}`)).text();
+const padHead = headOf(padHtml);
+ok(/kovrik/i.test(padHead.title) && padHead.title.includes(pad.name), 'seo: tovar sarlavhasida nomi va odamlar ishlatadigan so‘z (kovrik) bor', padHead.title);
+ok(padHead.description.startsWith(pad.name) && padHead.description.includes('коврик'), 'seo: tovar tavsifi nomi bilan boshlanadi va ruscha nomni ham o‘z ichiga oladi', padHead.description);
+ok(
+  padHtml.includes('class="also product__also"') && padHtml.includes('<span lang="ru">коврик для мыши</span>'),
+  'seo: tovar sahifasida «Boshqa nomlari» qatori bor, ruscha nomning tili belgilangan',
+);
+ok(padHtml.includes(`alt="${pad.name} — kovrik`), 'seo: rasm izohida tovar nomi va odamlar ishlatadigan nomi bor');
+const padTerms = seoLib.searchTerms({ t: dictionary() }, { category: pad.category, product: pad });
+ok(
+  padTerms.visible.length > 0 && padTerms.visible.length <= seoLib.MAX_VISIBLE_TERMS && padTerms.keywords.length <= 12,
+  'seo: qidiruv so‘zlari soni cheklangan (so‘z yig‘indisi emas)',
+);
+const padLd = ldNode(padHead, 'Product');
+ok(
+  padLd && padLd.offers?.price === pad.price && padLd.offers?.priceCurrency === 'UZS' && Array.isArray(padLd.alternateName) && padLd.image?.length === pad.images.length,
+  'seo: tovar ma’lumoti (schema.org) — narx, valyuta, boshqa nomlar, rasmlar',
+);
+const padTrail = ldNode(padHead, 'BreadcrumbList')?.itemListElement || [];
+ok(
+  padTrail.length === 4 && padTrail[2].item === `${ORIGIN}/katalog/gilamchalar` && padTrail[3].item === `${ORIGIN}/tovar/${pad.slug}`,
+  'seo: tovarning saytdagi yo‘li (bosh sahifa → katalog → kategoriya → tovar)',
+);
+
+const glidesHtml = await (await request('/katalog/glaydlar')).text();
+const glidesHead = headOf(glidesHtml);
+ok(glidesHead.title.includes('Sichqoncha glaydlari') && glidesHead.title.includes('skeytlar'), 'seo: kategoriya sarlavhasida nomi va «skeytlar» bor', glidesHead.title);
+ok(
+  glidesHtml.includes('class="pagehead__intro"') && glidesHtml.includes('class="also pagehead__also"') && glidesHead.keywords.includes('скейты для мыши'),
+  'seo: kategoriya sahifasida kirish matni, «Boshqa nomlari» va ruscha qidiruv so‘zlari bor',
+);
+eq(
+  ldNode(glidesHead, 'ItemList')?.numberOfItems,
+  repo.listProducts({ brand: 'lootbox', visibleOnly: true }).filter((item) => item.category?.slug === 'glaydlar').length,
+  'seo: kategoriya sahifasida tovarlar ro‘yxati (ItemList)',
+);
+
+const homeHead = headOf(home);
+ok(homeHead.title.includes('skeytlar') && homeHead.description.includes('Скейты'), 'seo: bosh sahifa sarlavhasi va tavsifida odamlar qidiradigan so‘zlar bor', homeHead.title);
+ok(
+  ldNode(homeHead, 'Organization')?.name === 'LOOTBOX' && ldNode(homeHead, 'WebSite')?.url === `${ORIGIN}/`,
+  'seo: bosh sahifada do‘kon va sayt haqida ma’lumot (schema.org)',
+);
+ok(
+  /<h1><span>LOOTBOX<\/span>/.test(home) && !home.includes('<h1 class="hero__title'),
+  'seo: bosh sahifaning asosiy sarlavhasi — «Brend haqida»dagi birinchi gap, slayd shiori emas',
+);
+ok(home.includes('class="index__aka"'), 'seo: kategoriyalar ro‘yxatida odamlar ishlatadigan nomlar ko‘rinadi');
+// «Brend haqida» matni bo'lmasa, asosiy sarlavha — birinchi slayd
+const aboutBefore = repo.getSettings().about_lootbox;
+repo.saveSettings({ about_lootbox: '' });
+const noAbout = await (await request('/')).text();
+ok(noAbout.includes('<h1 class="hero__title') && headOf(noAbout).h1 === 1, 'seo: «Brend haqida» bo‘sh bo‘lsa, asosiy sarlavha birinchi slaydda');
+repo.saveSettings({ about_lootbox: aboutBefore });
+
+const robots = await (await request('/robots.txt')).text();
+ok(
+  robots.includes('Disallow: /admin') && robots.includes('Clean-param: sort /katalog') && robots.includes(`Sitemap: ${ORIGIN}/sitemap.xml`),
+  'seo: robots.txt — admin yopiq, saralash alohida sahifa emas, sayt xaritasi ko‘rsatilgan',
+);
+ok((await (await request('/sitemap.xml')).text()).includes(`<loc>${ORIGIN}/tovar/${pad.slug}</loc><lastmod>`), 'seo: sayt xaritasida tovar va uning o‘zgargan sanasi bor');
+eq((await headAt('/katalog?sort=price_asc')).canonical, `${ORIGIN}/katalog`, 'seo: saralangan katalogning canonical manzili — asosiy katalog');
+ok((await headAt('/yoq-sahifa')).robots.includes('noindex'), 'seo: 404 sahifasi qidiruvga kirmaydi');
+// Yashirilgan tovar va tovarsiz bo'lim qidiruv tizimiga berilmaydi
+repo.patchProduct(pad.id, 'visible', 0);
+ok(!siteEntries().some((entry) => entry.path === `/tovar/${pad.slug}`), 'seo: yashirilgan tovar sayt xaritasida yo‘q');
+repo.patchProduct(pad.id, 'visible', 1);
+const fitItems = repo.listProducts({ brand: 'fit' });
+for (const item of fitItems) repo.patchProduct(item.id, 'visible', 0);
+ok(
+  (await headAt('/fit')).robots.includes('noindex') && (await headAt('/fit/katalog')).robots.includes('noindex') && !siteEntries().some((entry) => entry.path.startsWith('/fit')),
+  'seo: tovarsiz bo‘lim («Tovarlar tez orada») qidiruvga kirmaydi va sayt xaritasida yo‘q',
+);
+ok(!(await headAt('/')).robots, 'seo: asosiy bosh sahifa har doim qidiruvga ochiq');
+for (const item of fitItems) repo.patchProduct(item.id, 'visible', item.visible);
+
+// Admin o'z matnini yozsa — avtomatik o'rniga o'sha ishlatiladi
+const cleanedSeo = validate.cleanProduct({ brand: 'lootbox', name: 'Sinov', search_terms: 'kovrik, Kovrik; mousepad\nковрик', meta_title: '  O‘z sarlavham ', meta_description: 'O‘z tavsifim' });
+ok(
+  cleanedSeo.ok && cleanedSeo.data.search_terms === 'kovrik, mousepad, коврик' && cleanedSeo.data.meta_title === 'O‘z sarlavham',
+  'seo admin: qidiruv so‘zlari tartibga keltiriladi (takrorlar olib tashlanadi)',
+  cleanedSeo.data.search_terms,
+);
+ok(
+  !validate.cleanProduct({ brand: 'lootbox', name: 'Sinov', search_terms: Array.from({ length: 13 }, (_, i) => `soz${i}`).join(',') }).ok,
+  'seo admin: qidiruv so‘zlari soni cheklangan (13 tasi rad etiladi)',
+);
+ok(!validate.cleanProduct({ brand: 'lootbox', name: 'Sinov', meta_title: 'x'.repeat(121) }).ok, 'seo admin: juda uzun sarlavha rad etiladi');
+const padRow = repo.getProduct(pad.id);
+repo.updateProduct(pad.id, { ...padRow, search_terms: 'matras, to‘shama', meta_title: 'Maxsus sarlavha', meta_description: 'Maxsus tavsif matni.' });
+const customHtml = await (await request(`/tovar/${pad.slug}`)).text();
+const customHead = headOf(customHtml);
+ok(
+  customHead.title === 'Maxsus sarlavha' && customHead.description === 'Maxsus tavsif matni.' && customHead.keywords === 'matras, to‘shama' &&
+    customHtml.includes('matras, to‘shama</p>') && !customHtml.includes('коврик для мыши'),
+  'seo admin: tovarga yozilgan sarlavha, tavsif va qidiruv so‘zlari avtomatik o‘rniga ishlatiladi',
+);
+repo.updateProduct(pad.id, padRow);
+const padCategory = repo.getCategoryBySlug('lootbox', 'gilamchalar');
+repo.updateCategory(padCategory.id, { ...padCategory, search_terms: 'padlar, to‘shamalar', intro: 'O‘z kirish matnim.' });
+const padCategoryHtml = await (await request('/katalog/gilamchalar')).text();
+ok(
+  (await (await request(`/tovar/${pad.slug}`)).text()).includes('padlar, to‘shamalar</p>') && padCategoryHtml.includes('O‘z kirish matnim.') &&
+    headOf(padCategoryHtml).title.includes('(padlar, to‘shamalar)'),
+  'seo admin: kategoriyaning qidiruv so‘zlari tovarlariga ham o‘tadi, kirish matni sahifada chiqadi',
+);
+repo.updateCategory(padCategory.id, padCategory);
+eq((await headAt(`/tovar/${pad.slug}`)).title, padHead.title, 'seo admin: maydonlar bo‘shatilsa, avtomatik matn qaytadi');
+
+// Saytni tasdiqlash kodlari (Google Search Console, Yandex Webmaster)
+const verify = validate.cleanSettings({
+  google_verification: '<meta name="google-site-verification" content="abcDEF123456_test-code" />',
+  yandex_verification: '0123456789abcdef',
+  indexnow: false,
+});
+ok(
+  verify.ok && verify.patch.google_verification === 'abcDEF123456_test-code' && verify.patch.yandex_verification === '0123456789abcdef' && verify.patch.indexnow === '0',
+  'seo admin: tasdiqlash tegi butunligicha qo‘yilsa ham ichidan kod olinadi',
+);
+ok(!validate.cleanSettings({ google_verification: 'bu kod emas <script>' }).ok, 'seo admin: noto‘g‘ri tasdiqlash kodi rad etiladi');
+repo.saveSettings(verify.patch);
+const verifiedHtml = await (await request(`/tovar/${pad.slug}`)).text();
+ok(
+  verifiedHtml.includes('<meta name="google-site-verification" content="abcDEF123456_test-code">') &&
+    verifiedHtml.includes('<meta name="yandex-verification" content="0123456789abcdef">'),
+  'seo: tasdiqlash teglari sahifalarda chiqadi',
+);
+repo.saveSettings({ google_verification: '', yandex_verification: '', indexnow: '1' });
+ok(!(await (await request('/')).text()).includes('site-verification'), 'seo: kod kiritilmagan bo‘lsa tasdiqlash tegi chiqmaydi');
+
+// IndexNow: kalit fayli saytda ochiq turadi; lokal ishlaganda qidiruv tizimlariga hech narsa yuborilmaydi
+const indexnow = await import('../server/lib/indexnow.js');
+const nowKey = indexnow.indexNowKey();
+eq(await (await request(`/${nowKey}.txt`)).text(), nowKey, 'indexnow: kalit fayli saytda ochiladi');
+eq((await request('/0123456789abcdef0123456789abcdef.txt')).status, 404, 'indexnow: boshqa nomdagi kalit fayli yo‘q');
+eq(indexnow.indexNowKey(), nowKey, 'indexnow: kalit o‘zgarmaydi');
+eq(indexnow.queueUrls('/katalog'), false, 'indexnow: lokal ishlaganda (SITE_URL yo‘q) hech narsa yuborilmaydi');
+
+// Eski bazadagi boshlang'ich sarlavha yangisiga almashadi, egasi o'zgartirgan matnga esa tegilmaydi
+const { MIGRATIONS } = await import('../server/db/schema.js');
+const seoDefaults = { seo_title_lootbox: repo.getSettings().seo_title_lootbox, seo_desc_lootbox: repo.getSettings().seo_desc_lootbox };
+repo.saveSettings({ seo_title_lootbox: 'LOOTBOX — texnika va gaming aksessuarlari', seo_desc_lootbox: 'Mening o‘z tavsifim' });
+db.exec(MIGRATIONS.find((sql) => sql.includes("key = 'seo_title_lootbox'")));
+eq(get("SELECT value FROM settings WHERE key = 'seo_title_lootbox'").value, seoDefaults.seo_title_lootbox, 'seo: eski boshlang‘ich sarlavha yangisiga almashadi');
+eq(get("SELECT value FROM settings WHERE key = 'seo_desc_lootbox'").value, 'Mening o‘z tavsifim', 'seo: egasi o‘zgartirgan tavsifga tegilmaydi');
+repo.saveSettings(seoDefaults);
 
 // Yashirilgan tovar saytda ko'rinmaydi
 repo.patchProduct(product.id, 'visible', 0);

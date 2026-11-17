@@ -1,18 +1,19 @@
 // Tovar sahifasi: rasmlar, nom, narx, asosiy tugma (Uzum / Telegram kanal / lichka),
 // tavsif, xususiyatlar va o'xshash tovarlar.
 import { html, raw, paragraphs } from '../../lib/html.js';
-import { parseFeatures, productCode, truncate } from '../../lib/text.js';
+import { parseFeatures, productCode } from '../../lib/text.js';
 import { resolveDestination, otherDestinations } from '../../lib/links.js';
 import { listProducts } from '../../db/repo.js';
 import { artSvg, toneFor, toneStyle } from '../art.js';
 import { icon, destIcon } from '../icons.js';
 import { categoryUrl, productUrl } from '../context.js';
 import { page } from '../layout.js';
-import { picture, price, badges, carousel, destButton, artKeyOf, mediaKind } from '../components.js';
+import { picture, price, badges, carousel, destButton, artKeyOf, mediaKind, alsoKnown } from '../components.js';
+import { productSeo, productLd, breadcrumbLd, trailOf, ldGraph } from '../seo.js';
 
 const OTHER_LABEL = { uzum: 'otherUzum', channel: 'otherChannel', dm: 'otherDm' };
 
-function gallery(ctx, product, name, tone) {
+function gallery(ctx, product, alt, tone) {
   const { t } = ctx;
   const images = product.images;
   if (!images.length) {
@@ -32,7 +33,7 @@ function gallery(ctx, product, name, tone) {
         return html`<button class="gallery__item art has-${mediaKind(image)}" type="button" data-zoom="${image.url}"${i === 0 ? raw(' id="product-stage" data-stage') : ''}
           ${style ? raw(`style="${style}"`) : ''}
           aria-label="${t.product.zoom}: ${t.product.photo(i + 1, images.length)}">
-          ${picture(image, { alt: i === 0 ? name : `${name} — ${i + 1}`, sizes: '(min-width: 1024px) 30vw, 92vw', eager: i < 2, className: image.cutout ? 'is-cutout' : whole ? 'is-whole' : '' })}
+          ${picture(image, { alt: i === 0 ? alt : `${alt} — ${i + 1}`, sizes: '(min-width: 1024px) 30vw, 92vw', eager: i < 2, className: image.cutout ? 'is-cutout' : whole ? 'is-whole' : '' })}
         </button>`;
       })}
     </div>
@@ -56,7 +57,8 @@ function lightbox(ctx, count) {
 
 export function productPage(ctx, product) {
   const { t, brand, settings } = ctx;
-  const name = ctx.tr(product, 'name');
+  const seo = productSeo(ctx, product);
+  const name = seo.name;
   const tagline = ctx.tr(product, 'tagline');
   const description = ctx.tr(product, 'description');
   const features = parseFeatures(ctx.tr(product, 'features'));
@@ -77,7 +79,7 @@ export function productPage(ctx, product) {
   const body = html`
     <article class="product" data-product="${product.id}" data-view-product="${product.id}">
       <div class="wrap product__grid">
-        <div class="product__gallery">${gallery(ctx, product, name, tone)}</div>
+        <div class="product__gallery">${gallery(ctx, product, seo.alt, tone)}</div>
 
         <div class="product__info">
           <nav class="crumbs" aria-label="${t.nav.home}">
@@ -124,6 +126,8 @@ export function productPage(ctx, product) {
               </section>`
             : ''}
 
+          ${alsoKnown(ctx, seo.terms.visible, 'also product__also')}
+
           <div class="product__meta">
             <span>${t.product.code}: ${productCode(product)}</span>
             <button class="product__share" type="button" data-share data-copied="${t.product.copied}">${icon('share')}<span>${t.product.share}</span></button>
@@ -146,29 +150,20 @@ export function productPage(ctx, product) {
     ${product.images.length ? lightbox(ctx, product.images.length) : ''}`;
 
   const cover = product.images[0];
-  const summary = tagline || truncate(description, 160);
+  const priced = ctx.showPrices && product.price != null;
   return page(ctx, {
-    title: `${name} — ${brand.name}`,
-    description: summary,
+    title: seo.title,
+    description: seo.description,
+    keywords: seo.keywords,
     canonical: productUrl(product),
     ogImage: cover ? cover.url : null,
+    ogImageAlt: seo.alt,
     ogType: 'product',
+    product: priced ? { price: product.price, currency: 'UZS' } : null,
     pageName: 'product',
     adminLink: { href: `/admin/products/${product.id}`, label: t.admin.editProduct },
     body,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'Product',
-      name,
-      description: truncate(description || tagline, 500) || undefined,
-      sku: productCode(product),
-      brand: { '@type': 'Brand', name: brand.name },
-      category: category?.name,
-      image: product.images.map((image) => ctx.origin + image.url),
-      offers:
-        ctx.showPrices && product.price != null
-          ? { '@type': 'Offer', price: product.price, priceCurrency: 'UZS', url: ctx.origin + productUrl(product) }
-          : undefined,
-    },
+    // Qidiruv tizimi uchun: tovar (nomi, boshqa nomlari, narxi) va uning katalogdagi o'rni
+    jsonLd: ldGraph(productLd(ctx, product, seo), breadcrumbLd(ctx, trailOf(ctx, { category, product }))),
   });
 }

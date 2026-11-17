@@ -184,6 +184,24 @@ if (form) {
       viewLink.hidden = !product.on_site;
     }
     if (Array.isArray(result.data.images)) uploader.reset(result.data.images);
+    // Qidiruvdagi ko'rinish namunasi va bo'sh maydonlardagi avtomatik matnlar yangi ma'lumotga moslanadi
+    const seo = result.data.seo;
+    if (seo) {
+      const put = (selector, text) => {
+        const element = $(selector, form);
+        if (element) element.textContent = text;
+      };
+      put('[data-serp-title]', seo.title);
+      put('[data-serp-text]', seo.description);
+      put('[data-serp-slug]', product.slug);
+      for (const [name, value] of Object.entries(seo.fields || {})) {
+        if (form.elements[name]) form.elements[name].value = value;
+      }
+      form.elements.meta_description.dispatchEvent(new Event('input'));
+      form.elements.search_terms.placeholder = (seo.auto.terms || []).join(', ');
+      form.elements.meta_title.placeholder = seo.auto.title || '';
+      form.elements.meta_description.placeholder = seo.auto.description || '';
+    }
     const stamp = $('[data-updated]', form);
     if (stamp) stamp.textContent = 'hozirgina';
     tracker.markClean('Saqlandi');

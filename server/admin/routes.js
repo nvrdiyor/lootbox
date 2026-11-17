@@ -14,6 +14,9 @@ import {
 import { IMAGE_LIMITS, ImageError, storeImage, removeImageFiles } from '../lib/images.js';
 import { resolveDestination, otherDestinations } from '../lib/links.js';
 import { dictionary } from '../i18n/index.js';
+import { queueUrls } from '../lib/indexnow.js';
+import { brandOf, BRANDS as SITE_BRANDS } from '../site/brand.js';
+import { productSeo } from '../site/seo.js';
 import { BRANDS } from '../db/schema.js';
 import {
   getSettings, saveSettings, insertImage,
@@ -79,6 +82,33 @@ function productSummary(product) {
   const onSite = Boolean(product.visible && (!product.category || product.category.visible));
   return { id: product.id, slug: product.slug, name: product.name, visible: product.visible, on_site: onSite, url: `/tovar/${product.slug}` };
 }
+
+/** Tovarning qidiruvdagi ko'rinishi (muharrirdagi namuna va maydonlardagi avtomatik matnlar yangilanishi uchun) */
+function productSeoSummary(product) {
+  const settings = getSettings();
+  const seo = productSeo({ t: dictionary(), brand: brandOf(product.brand), settings, showPrices: settings.show_prices !== '0' }, product);
+  return {
+    title: seo.title,
+    description: seo.description,
+    auto: seo.auto,
+    // server tartibga keltirgan qiymatlar (masalan, takrorlangan qidiruv so'zi olib tashlanadi)
+    fields: { search_terms: product.search_terms, meta_title: product.meta_title, meta_description: product.meta_description },
+  };
+}
+
+// ---- O'zgargan sahifalar haqida qidiruv tizimlariga xabar (IndexNow; lokal ishlaganda hech narsa yuborilmaydi)
+/** Tovar ko'rinadigan sahifalar: o'zi, kategoriyasi, katalog va bosh sahifa */
+function productPaths(product) {
+  if (!product) return [];
+  const brand = brandOf(product.brand);
+  return [`/tovar/${product.slug}`, product.category ? `${brand.catalog}/${product.category.slug}` : null, brand.catalog, brand.home].filter(Boolean);
+}
+function categoryPaths(category) {
+  if (!category) return [];
+  const brand = brandOf(category.brand);
+  return [`${brand.catalog}/${category.slug}`, brand.catalog, brand.home];
+}
+const homePaths = () => Object.values(SITE_BRANDS).map((brand) => brand.home);
 
 function notFoundPage(c) {
   return c.html(
@@ -257,7 +287,9 @@ export function mountAdmin(app) {
     const result = cleanProduct(input);
     if (!result.ok) return invalid(c, result.errors);
     const id = createProduct(result.data, result.imageIds);
-    return c.json({ ok: true, product: productSummary(getProduct(id)) }, 201);
+    const created = getProduct(id);
+    queueUrls(productPaths(created));
+    return c.json({ ok: true, product: productSummary(created) }, 201);
   });
 
   app.put('/admin/api/products/:id', api, jsonLimit, async (c) => {
@@ -267,9 +299,12 @@ export function mountAdmin(app) {
     if (!input) return bad(c);
     const result = cleanProduct(input);
     if (!result.ok) return invalid(c, result.errors);
+    const before = getProduct(id);
     if (!updateProduct(id, result.data, Array.isArray(input.image_ids) ? result.imageIds : undefined)) return missing(c);
     const product = getProduct(id);
-    return c.json({ ok: true, product: productSummary(product), images: product.images });
+    // Havola nomi yoki kategoriyasi o'zgargan bo'lsa, eski manzillar ham xabar qilinadi
+    queueUrls(productPaths(before), productPaths(product));
+    return c.json({ ok: true, product: productSummary(product), images: product.images, seo: productSeoSummary(product) });
   });
 
   app.patch('/admin/api/products/:id', api, jsonLimit, async (c) => {
@@ -277,12 +312,17 @@ export function mountAdmin(app) {
     const input = await readJson(c);
     if (!id || !input || typeof input.field !== 'string') return bad(c);
     if (!patchProduct(id, input.field, Boolean(input.value))) return missing(c);
-    return c.json({ ok: true, product: productSummary(getProduct(id)) });
+    const patched = getProduct(id);
+    queueUrls(productPaths(patched));
+    return c.json({ ok: true, product: productSummary(patched) });
   });
 
   app.delete('/admin/api/products/:id', api, (c) => {
     const id = idOf(c);
-    return id && deleteProduct(id) ? c.json({ ok: true }) : missing(c);
+    const doomed = id ? getProduct(id) : null;
+    if (!id || !deleteProduct(id)) return missing(c);
+    queueUrls(productPaths(doomed));
+    return c.json({ ok: true });
   });
 
   app.post('/admin/api/products/:id/duplicate', api, (c) => {
@@ -305,7 +345,9 @@ export function mountAdmin(app) {
     const result = cleanCategory(input);
     if (!result.ok) return invalid(c, result.errors);
     const id = createCategory(result.data);
-    return c.json({ ok: true, category: getCategory(id) }, 201);
+    const created = getCategory(id);
+    queueUrls(categoryPaths(created));
+    return c.json({ ok: true, category: created }, 201);
   });
 
   app.put('/admin/api/categories/:id', api, jsonLimit, async (c) => {
@@ -315,20 +357,28 @@ export function mountAdmin(app) {
     if (!input) return bad(c);
     const result = cleanCategory(input);
     if (!result.ok) return invalid(c, result.errors);
+    const before = getCategory(id);
     if (!updateCategory(id, result.data)) return missing(c);
-    return c.json({ ok: true, category: getCategory(id) });
+    const category = getCategory(id);
+    queueUrls(categoryPaths(before), categoryPaths(category));
+    return c.json({ ok: true, category });
   });
 
   app.patch('/admin/api/categories/:id', api, jsonLimit, async (c) => {
     const id = idOf(c);
     const input = await readJson(c);
     if (!id || !input || typeof input.field !== 'string') return bad(c);
-    return patchCategory(id, input.field, Boolean(input.value)) ? c.json({ ok: true }) : missing(c);
+    if (!patchCategory(id, input.field, Boolean(input.value))) return missing(c);
+    queueUrls(categoryPaths(getCategory(id)));
+    return c.json({ ok: true });
   });
 
   app.delete('/admin/api/categories/:id', api, (c) => {
     const id = idOf(c);
-    return id && deleteCategory(id) ? c.json({ ok: true }) : missing(c);
+    const doomed = id ? getCategory(id) : null;
+    if (!id || !deleteCategory(id)) return missing(c);
+    queueUrls(categoryPaths(doomed));
+    return c.json({ ok: true });
   });
 
   // ---- Hero slaydlar -------------------------------------------------------------
@@ -379,6 +429,7 @@ export function mountAdmin(app) {
     const result = cleanSettings(input);
     if (!result.ok) return invalid(c, result.errors);
     saveSettings(result.patch);
+    queueUrls(homePaths());
     return c.json({ ok: true, settings: getSettings() });
   });
 

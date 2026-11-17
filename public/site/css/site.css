@@ -1217,6 +1217,8 @@ body:not(.has-overlay-header) .header::before,
   overflow-wrap: anywhere;
 }
 .index__tag { font-size: clamp(.86rem, 1.1vw, 1rem); color: var(--text-2); }
+/* Kategoriya odamlar tilida qanday atalishi (skeytlar · mouse skates · …) */
+.index__aka { font: 500 .7rem/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 .index__count { display: none; }
 .index__go {
   width: 44px;
@@ -1395,6 +1397,9 @@ body:not(.has-overlay-header) .header::before,
   letter-spacing: -.035em;
   text-wrap: pretty;
 }
+/* Birinchi gap — sahifaning asosiy sarlavhasi (h1), qolgani abzas: ikkalasi bitta matn bo'lib oqadi */
+.manifesto__text h1,
+.manifesto__text p { display: inline; font: inherit; letter-spacing: inherit; }
 .js .manifesto__text span { opacity: .14; transition: opacity .5s; }
 .js .manifesto__text span.is-lit { opacity: 1; }
 .pillars { display: grid; gap: 12px; margin-top: clamp(36px, 5vw, 84px); }
@@ -1509,6 +1514,14 @@ body:not(.has-overlay-header) .header::before,
 .pagehead__row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
 .pagehead__meta { font: 500 .78rem var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-bottom: .6em; }
 .pagehead__text { max-width: 52ch; margin-top: 14px; color: var(--text-2); font-size: clamp(1rem, 1.3vw, 1.2rem); }
+/* Kategoriya haqida qisqa kirish matni va «boshqa nomlari» qatori */
+.pagehead__intro { max-width: 72ch; margin-top: 12px; color: var(--muted); font-size: .95rem; line-height: 1.6; }
+.pagehead__intro p + p { margin-top: .6em; }
+.pagehead__also { margin-top: 12px; }
+
+/* «Boshqa nomlari: …» — tovar yoki kategoriya odamlar tilida qanday atalishi */
+.also { max-width: 72ch; font-size: .86rem; line-height: 1.55; color: var(--muted); }
+.also__label { margin-right: .35em; font: 500 .7rem var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 
 .filters {
   position: sticky;
@@ -1737,6 +1750,7 @@ body:not(.has-overlay-header) .header::before,
 }
 .prose { display: grid; gap: .9em; color: var(--text-2); font-size: 1.02rem; line-height: 1.65; }
 .product__block .specs { margin-top: 0; }
+.product__also { max-width: none; }
 .product__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); font: 500 .72rem var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .product__share { display: inline-flex; align-items: center; gap: 8px; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--text-2); transition: color .2s; }
 .product__share:hover { color: var(--text); }

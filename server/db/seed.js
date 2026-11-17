@@ -104,9 +104,11 @@ const SETTINGS = {
     'LOOTBOX — texnika va gaming aksessuarlari. Sichqoncha glaydlaridan mexanik switchlargacha: setupni tezroq, qulayroq va chiroyliroq qiladigan detallarni tanlaymiz.',
   about_fit:
     'LOOTBOX FIT — kundalik hayot va sport uchun zamonaviy kiyimlar. Erkin bichim, zich mato va ortiqcha bezaksiz dizayn: kiyim sizga xalaqit bermasligi kerak.',
-  seo_title_lootbox: 'LOOTBOX — texnika va gaming aksessuarlari',
+  // Sarlavha va tavsifda odamlar qidiradigan so'zlar turadi (skeyt, kovrik; ruscha nomlar tavsif oxirida).
+  // Eski bazalarda shu matnlarga schema.js dagi oxirgi o'zgarish o'tkazadi (egasi o'zgartirmagan bo'lsa).
+  seo_title_lootbox: 'LOOTBOX — gaming aksessuarlari: skeytlar, kovriklar, switchlar',
   seo_desc_lootbox:
-    'Sichqoncha glaydlari, mexanik klaviatura switchlari, gilamchalar va grip stikerlar. Uzum Market orqali yetkazib beriladi.',
+    'Sichqoncha skeytlari (glaydlar), kovriklar, mexanik klaviatura switchlari va grip stikerlar. O‘zbekiston bo‘ylab Uzum Market orqali yetkazib beriladi. Скейты и коврики для мыши, свитчи, грипсы.',
   seo_title_fit: 'LOOTBOX FIT — kundalik hayot va sport uchun kiyimlar',
   seo_desc_fit: 'Oversize futbolkalar, xudilar va joggerlar. Uzum Market orqali yetkazib beriladi.',
 };

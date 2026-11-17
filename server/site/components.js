@@ -19,6 +19,18 @@ export function kicker(label, number = null) {
   return html`<p class="kicker" data-reveal>${number != null ? html`<span class="kicker__n">${two(number)}</span>` : ''}${label}</p>`;
 }
 
+/**
+ * «Boshqa nomlari: skeytlar, mouse skates, …» qatori: tovar yoki kategoriya odamlar tilida qanday atalishi
+ * (ro'yxat seo.js dan keladi). Xaridor o'zi bilgan nomni ko'radi, qidiruv tizimi esa sahifani shu so'zlar bilan
+ * ham topadi. Kirill yozuvidagi (ruscha) nomlar lang="ru" bilan belgilanadi.
+ */
+export function alsoKnown(ctx, terms, className = 'also') {
+  if (!terms?.length) return '';
+  return html`<p class="${className}"><span class="also__label">${ctx.t.seo.also}:</span> ${terms.map(
+    (term, i) => html`${i ? ', ' : ''}${/\p{Script=Cyrillic}/u.test(term) ? html`<span lang="ru">${term}</span>` : term}`,
+  )}</p>`;
+}
+
 // ---- Rasm ------------------------------------------------------------------
 
 /** Kichik nusxaning kengligi: bazada yozilgan bo'lsa o'sha, bo'lmasa yuklash qoidasidan (uzun tomoni 800 px) */

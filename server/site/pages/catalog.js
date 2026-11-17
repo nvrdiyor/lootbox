@@ -1,10 +1,11 @@
 // Katalog: kategoriya tugmachalari, saralash va tovarlar to'ri.
-import { html, raw, attrs } from '../../lib/html.js';
+import { html, raw, attrs, paragraphs } from '../../lib/html.js';
 import { listProducts } from '../../db/repo.js';
 import { icon } from '../icons.js';
 import { categoryUrl } from '../context.js';
 import { page } from '../layout.js';
-import { splitWords, grid } from '../components.js';
+import { splitWords, grid, alsoKnown } from '../components.js';
+import { categorySeo, catalogSeo, breadcrumbLd, itemListLd, trailOf, ldGraph } from '../seo.js';
 
 const SORTS = ['sort', 'new', 'price_asc', 'price_desc'];
 
@@ -23,6 +24,8 @@ export function catalogPage(ctx, category) {
   const sortQuery = sort === 'sort' ? '' : `?sort=${sort}`;
   const heading = category ? ctx.tr(category, 'name') : t.catalog.title;
   const tagline = category ? ctx.tr(category, 'tagline') : '';
+  // Qidiruv tizimlari uchun: sarlavha, tavsif, kategoriya sahifasida esa kirish matni va «boshqa nomlari»
+  const seo = category ? categorySeo(ctx, category, products) : catalogSeo(ctx, categories, products);
 
   const sortLabels = {
     sort: t.catalog.sortDefault,
@@ -48,6 +51,8 @@ export function catalogPage(ctx, category) {
           <p class="pagehead__meta" data-reveal>${t.catalog.count(products.length)}</p>
         </div>
         ${tagline ? html`<p class="pagehead__text" data-reveal>${tagline}</p>` : ''}
+        ${category && seo.intro ? html`<div class="pagehead__intro" data-reveal>${paragraphs(seo.intro)}</div>` : ''}
+        ${category ? alsoKnown(ctx, seo.terms.visible, 'also pagehead__also') : ''}
       </div>
     </section>
 
@@ -77,12 +82,16 @@ export function catalogPage(ctx, category) {
           </section>`}
     </div>`;
 
-  const title = category ? `${heading} — ${brand.name}` : `${t.catalog.title} — ${brand.name}`;
   return page(ctx, {
-    title,
-    description: tagline || (brand.key === 'fit' ? ctx.settings.seo_desc_fit : ctx.settings.seo_desc_lootbox),
+    title: seo.title,
+    description: seo.description,
+    keywords: seo.keywords,
+    // Bo'sh sahifa («Bu yerda hozircha tovar yo'q») qidiruvga kirmaydi
+    noindex: !products.length,
     canonical: base,
     pageName: 'catalog',
     body,
+    // Qidiruv tizimi uchun: sahifaning saytdagi o'rni va undagi tovarlar ro'yxati
+    jsonLd: ldGraph(breadcrumbLd(ctx, trailOf(ctx, { category })), itemListLd(ctx, products)),
   });
 }

@@ -1,5 +1,6 @@
 // Sozlamalar: havolalar, ijtimoiy tarmoqlar, ko'rinish, matnlar, xavfsizlik, demo ma'lumot.
 import { html, raw } from '../../lib/html.js';
+import { config } from '../../config.js';
 import { getSettings, demoCounts } from '../../db/repo.js';
 import { ic } from '../icons.js';
 import { shell } from '../layout.js';
@@ -10,6 +11,7 @@ const SECTIONS = [
   ['ijtimoiy', 'Ijtimoiy tarmoqlar', 'chat'],
   ['korinish', 'Ko‘rinish', 'palette'],
   ['matnlar', 'Matnlar', 'text'],
+  ['qidiruv', 'Qidiruv tizimlari', 'search'],
   ['xavfsizlik', 'Xavfsizlik', 'lock'],
   ['demo', 'Demo ma’lumot', 'bolt'],
 ];
@@ -18,6 +20,7 @@ export function settingsPage(c) {
   const s = getSettings();
   const demo = demoCounts();
   const demoTotal = demo.products + demo.categories + demo.slides;
+  const siteOrigin = config.siteUrl || 'https://lootbox.uz';
 
   const body = html`
 <div class="settings">
@@ -113,6 +116,20 @@ export function settingsPage(c) {
           ${field({ name: 'seo_title_fit', label: 'Sahifa sarlavhasi (SEO)', value: s.seo_title_fit, maxlength: 120, hint: 'Brauzer oynasi va qidiruv natijasida chiqadi. 60 belgigacha yaxshi.' })}
           ${textarea({ name: 'seo_desc_fit', label: 'Sahifa tavsifi (SEO)', value: s.seo_desc_fit, rows: 3, maxlength: 300, counter: true, hint: 'Qidiruv natijasi va Telegramdagi havola ostida chiqadi.' })}
         </div>
+      </div>
+    </section>
+
+    <section class="card" id="qidiruv">
+      <header class="card__head"><div><h2 class="card__title">Qidiruv tizimlari</h2><p class="card__sub">Sayt Google va Yandex’da chiqishi uchun: saytni o‘zingizniki deb tasdiqlash va yangilanishlar haqida xabar berish.</p></div></header>
+      <div class="stack">
+        <div class="grid-2">
+          ${field({ name: 'google_verification', label: 'Google Search Console kodi', value: s.google_verification, mono: true, placeholder: 'content="..." ichidagi kod', hint: 'search.google.com/search-console → saytni qo‘shish → «HTML tegi» usuli. Tegni butunligicha qo‘ysangiz ham bo‘ladi.' })}
+          ${field({ name: 'yandex_verification', label: 'Yandex Webmaster kodi', value: s.yandex_verification, mono: true, placeholder: 'content="..." ichidagi kod', hint: 'webmaster.yandex.com → saytni qo‘shish → «Meta-teg» usuli. Tegni butunligicha qo‘ysangiz ham bo‘ladi.' })}
+        </div>
+        <div class="switches">
+          ${switchRow({ name: 'indexnow', checked: s.indexnow !== '0', label: 'Yangilanishlar haqida qidiruv tizimlariga xabar berish', hint: 'Tovar qo‘shilganda yoki o‘zgarganda Yandex va Bing’ga darhol xabar boradi (IndexNow) — yangi sahifa tezroq topiladi. Faqat sahifa manzillari yuboriladi. Google bu usulni qo‘llamaydi: unga sayt xaritasi yetarli.' })}
+        </div>
+        <p class="note">${ic('info')}<span>Sayt xaritasi: <code>${siteOrigin}/sitemap.xml</code>. Kodni saqlagach, ikkala tizimda ham «Sitemap» bo‘limiga shu manzilni qo‘shing. To‘liq qadamlar loyihadagi README faylida — «Qidiruv tizimlari (SEO)» bo‘limi.</span></p>
       </div>
     </section>
 

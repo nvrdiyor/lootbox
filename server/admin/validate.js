@@ -20,6 +20,12 @@ export const LIMITS = {
   slideTitle: 90,
   slideSubtitle: 220,
   slideCta: 40,
+  searchTerms: 400,
+  searchTermCount: 12,
+  searchTerm: 60,
+  metaTitle: 120,
+  metaDescription: 300,
+  categoryIntro: 900,
 };
 
 /** Boshqaruv belgilarini olib tashlaydi (yangi qator va tab qoladi). */
@@ -46,6 +52,34 @@ const block = (value) =>
     .trim();
 
 const flag = (value) => (value === true || value === 1 || value === '1' || value === 'on' || value === 'true' ? 1 : 0);
+
+/**
+ * Qidiruv so'zlari: "kovrik, mousepad; коврик" → "kovrik, mousepad, коврик" (takrorlarsiz, vergul bilan).
+ * Ko'p so'z yozib tashlash foyda bermaydi (qidiruv tizimlari buni yoqtirmaydi), shuning uchun soni cheklangan.
+ */
+function searchTerms(errors, field, value) {
+  const seen = new Set();
+  const list = [];
+  for (const part of strip(value).split(/[,;\n]+/)) {
+    const term = part.replace(/\s+/g, ' ').trim();
+    const key = term.toLowerCase();
+    if (!term || seen.has(key)) continue;
+    seen.add(key);
+    list.push(term);
+  }
+  if (list.length > LIMITS.searchTermCount) errors[field] = `Qidiruv so‘zlari juda ko‘p: ${list.length} ta. Eng ko‘pi ${LIMITS.searchTermCount} ta — eng muhimlarini qoldiring.`;
+  else if (list.some((term) => term.length > LIMITS.searchTerm)) errors[field] = `Har bir qidiruv so‘zi ${LIMITS.searchTerm} belgidan oshmasin.`;
+  return list.join(', ');
+}
+
+/** Tovar va kategoriya uchun umumiy SEO maydonlari */
+function seoFields(errors, data, input) {
+  data.search_terms = searchTerms(errors, 'search_terms', input.search_terms);
+  data.meta_title = line(input.meta_title);
+  tooLong(errors, 'meta_title', data.meta_title, LIMITS.metaTitle, 'Sahifa sarlavhasi');
+  data.meta_description = line(input.meta_description);
+  tooLong(errors, 'meta_description', data.meta_description, LIMITS.metaDescription, 'Sahifa tavsifi');
+}
 
 function tooLong(errors, field, value, max, label) {
   if (value.length > max) errors[field] = `${label} juda uzun: ${value.length} belgi. Eng ko‘pi ${max} ta.`;
@@ -106,6 +140,8 @@ export function cleanProduct(input = {}) {
 
   data.features = block(input.features);
   tooLong(errors, 'features', data.features, LIMITS.features, 'Xususiyatlar');
+
+  seoFields(errors, data, input);
 
   data.price = money(errors, 'price', input.price);
   data.old_price = money(errors, 'old_price', input.old_price);
@@ -190,6 +226,10 @@ export function cleanCategory(input = {}) {
 
   data.tagline = line(input.tagline);
   tooLong(errors, 'tagline', data.tagline, LIMITS.categoryTagline, 'Izoh');
+
+  seoFields(errors, data, input);
+  data.intro = block(input.intro);
+  tooLong(errors, 'intro', data.intro, LIMITS.categoryIntro, 'Kirish matni');
 
   const art = line(input.art) || 'box';
   if (isArtKey(art)) data.art = art;
@@ -382,6 +422,18 @@ export function cleanSettings(input = {}) {
   for (const key of ['seo_desc_lootbox', 'seo_desc_fit']) {
     if (has(key)) patch[key] = limited(errors, key, input[key], 300, 'Tavsif');
   }
+
+  // Saytni tasdiqlash kodlari: Google Search Console va Yandex Webmaster bergan <meta ...> tegini to'liq qo'yish ham
+  // mumkin — ichidan kodning o'zi olinadi
+  for (const key of ['google_verification', 'yandex_verification']) {
+    if (!has(key)) continue;
+    const text = line(input[key]);
+    const code = (text.match(/content\s*=\s*["']?([A-Za-z0-9_-]+)/i) || [])[1] || text;
+    if (!code) patch[key] = '';
+    else if (/^[A-Za-z0-9_-]{8,128}$/.test(code)) patch[key] = code;
+    else errors[key] = 'Kod noto‘g‘ri. Qidiruv tizimi bergan tegdagi content="..." ichidagi qiymatni qo‘ying.';
+  }
+  if (has('indexnow')) patch.indexnow = flag(input.indexnow) ? '1' : '0';
 
   for (const key of Object.keys(errors)) delete patch[key];
   return { patch, errors, ok: Object.keys(errors).length === 0 };

@@ -174,10 +174,17 @@ function brandFileExists(name) {
  * To'liq HTML sahifa.
  * @param {object} ctx makeContext() natijasi
  * @param {{ title: string, description?: string, body: any, overlay?: boolean,
- *   ogImage?: string|null, ogType?: string, canonical?: string, jsonLd?: object|null, pageName?: string }} options
+ *   ogImage?: string|null, ogType?: string, canonical?: string, jsonLd?: object|null, pageName?: string,
+ *   keywords?: string[], ogImageAlt?: string, noindex?: boolean,
+ *   product?: { price: number, currency: string }|null }} options
+ *   keywords — odamlar shu sahifani qanday so'zlar bilan qidirishi (seo.js); noindex — qidiruvga kirmasligi kerak
+ *   bo'lgan sahifa; product — tovar narxi (havola ulashilganda ko'rinadi).
  */
-export function page(ctx, { title, description = '', body, overlay = false, ogImage = null, ogType = 'website', canonical = null, jsonLd = null, pageName = '', adminLink = null }) {
-  const { t, brand } = ctx;
+export function page(ctx, {
+  title, description = '', body, overlay = false, ogImage = null, ogType = 'website', canonical = null, jsonLd = null,
+  pageName = '', adminLink = null, keywords = [], ogImageAlt = '', noindex = false, product = null,
+}) {
+  const { t, brand, settings } = ctx;
   const canonicalUrl = ctx.origin + (canonical || ctx.path);
   const fallbackOg = `og-${brand.key}.png`;
   const image = ogImage || (brandFileExists(fallbackOg) ? `/static/brand/${fallbackOg}` : null);
@@ -190,7 +197,11 @@ export function page(ctx, { title, description = '', body, overlay = false, ogIm
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${title}</title>
 ${description ? html`<meta name="description" content="${description}">` : ''}
+${keywords.length ? html`<meta name="keywords" content="${keywords.join(', ')}">` : ''}
+${noindex ? raw('<meta name="robots" content="noindex, follow">') : ''}
 <link rel="canonical" href="${canonicalUrl}">
+${settings.google_verification ? html`<meta name="google-site-verification" content="${settings.google_verification}">` : ''}
+${settings.yandex_verification ? html`<meta name="yandex-verification" content="${settings.yandex_verification}">` : ''}
 <meta name="theme-color" content="${brand.themeColor}">
 <meta property="og:site_name" content="${brand.name}">
 <meta property="og:type" content="${ogType}">
@@ -199,6 +210,8 @@ ${description ? html`<meta property="og:description" content="${description}">` 
 <meta property="og:url" content="${canonicalUrl}">
 <meta property="og:locale" content="uz_UZ">
 ${imageUrl ? html`<meta property="og:image" content="${imageUrl}"><meta name="twitter:card" content="summary_large_image">` : ''}
+${imageUrl && ogImageAlt ? html`<meta property="og:image:alt" content="${ogImageAlt}">` : ''}
+${product ? html`<meta property="product:price:amount" content="${product.price}"><meta property="product:price:currency" content="${product.currency}">` : ''}
 <link rel="icon" href="/favicon.svg${brand.key === 'fit' ? '?b=fit' : ''}" type="image/svg+xml">
 <link rel="preload" href="/static/vendor/fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/vendor/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>

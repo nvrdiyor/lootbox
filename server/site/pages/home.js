@@ -13,6 +13,7 @@ import { slidePhotos } from '../slide-photos.js';
 import {
   splitWords, kicker, picture, price, badges, carousel, sectionHead, linkArrow, destButton, artKeyOf, mediaKind,
 } from '../components.js';
+import { homeSeo, searchTerms, organizationLd, websiteLd, ldGraph } from '../seo.js';
 
 const two = (n) => String(n).padStart(2, '0');
 
@@ -73,7 +74,7 @@ function titleLines(title) {
     });
 }
 
-function hero(ctx, slides, products) {
+function hero(ctx, slides, products, { mainHeading = true } = {}) {
   const { t, brand } = ctx;
   const list = slides.length
     ? slides
@@ -86,7 +87,9 @@ function hero(ctx, slides, products) {
     const subtitle = ctx.tr(slide, 'subtitle');
     const kick = ctx.tr(slide, 'kicker');
     const cta = ctx.tr(slide, 'cta_label') || t.hero.fallbackCta;
-    const tag = i === 0 ? 'h1' : 'h2';
+    // Sahifada bitta asosiy sarlavha (h1) bo'ladi: «Brend haqida» matni bor bo'lsa — o'sha (pastga qarang),
+    // bo'lmasa birinchi slayd sarlavhasi
+    const tag = i === 0 && mainHeading ? 'h1' : 'h2';
     const external = target.external ? raw(' target="_blank" rel="noopener"') : '';
     const chips = html`<span class="hero__chip hero__chip--a" data-tilt-layer>${brand.key === 'fit' ? 'FT' : 'LB'} / ${two(i + 1)}</span>
           ${kick ? html`<span class="hero__chip hero__chip--b" data-tilt-layer>${kick}</span>` : ''}`;
@@ -163,6 +166,8 @@ function categoryIndex(ctx, number, products) {
   // Kategoriyadagi rasmli tovarlarning muqovalari: qator yonida kichik to'plam bo'lib turadi,
   // kategoriyaning o'z rasmi bo'lmasa sichqoncha ostidagi katta rasm ham shulardan olinadi
   const coversOf = (cat) => products.filter((item) => item.category_id === cat.id && item.images.length).slice(0, 3).map((item) => item.images[0]);
+  // Kategoriya odamlar tilida qanday ataladi (skeytlar, kovrik, ...): havola matnida ham shu so'zlar bo'lsin
+  const akaOf = (cat) => searchTerms(ctx, { category: cat }).visible.slice(0, 3);
   return html`<section class="section section--index" id="kategoriyalar">
     ${sectionHead({ label: t.home.categoriesKicker, number, title: t.home.categoriesTitle })}
     <div class="wrap">
@@ -171,12 +176,14 @@ function categoryIndex(ctx, number, products) {
           const tone = toneFor(brand.key, cat.id);
           const covers = coversOf(cat);
           const cover = cat.image || covers[0] || null;
+          const aka = akaOf(cat);
           return html`<li data-reveal style="--d:${i * 60}">
             <a class="index__row${covers.length ? ' has-stack' : ''}" href="${categoryUrl(brand.key, cat)}" data-index-row style="${toneStyle(tone)}">
               <span class="index__n">${two(i + 1)}</span>
               <span class="index__main">
                 <span class="index__name">${ctx.tr(cat, 'name')}</span>
                 ${cat.tagline ? html`<span class="index__tag">${ctx.tr(cat, 'tagline')}</span>` : ''}
+                ${aka.length ? html`<span class="index__aka">${aka.join(' · ')}</span>` : ''}
               </span>
               ${covers.length
                 ? html`<span class="index__stack" aria-hidden="true">${covers.map((image, k) => html`<span class="index__mini${image.cutout ? ' index__mini--cutout' : ''}" style="--k:${k}">${picture(image, { sizes: '72px' })}</span>`)}</span>`
@@ -247,6 +254,10 @@ function manifesto(ctx, number) {
   const { t, brand, settings, links } = ctx;
   const about = brand.key === 'fit' ? settings.about_fit : settings.about_lootbox;
   if (!about) return '';
+  // Birinchi gap («LOOTBOX — …») sahifaning asosiy sarlavhasi (h1): brend nima ekanini aytadi. Qolgani oddiy matn;
+  // ko'rinishi bir xil — ikkalasi bitta abzas bo'lib oqadi.
+  const [, lead = about, rest = ''] = about.match(/^(.+?[.!?])\s+(.+)$/s) || [];
+  const wordSpans = (text) => words(text).map((word) => html`<span>${word}</span>${' '}`);
   const pillars = [
     links.uzum && { icon: 'bag', title: t.home.pillarUzum, text: t.home.pillarUzumText },
     links.channel && { icon: 'telegram', title: t.home.pillarChannel, text: t.home.pillarChannelText },
@@ -255,7 +266,7 @@ function manifesto(ctx, number) {
   return html`<section class="section manifesto" id="brend">
     <div class="wrap">
       ${kicker(t.home.aboutKicker, number)}
-      <p class="manifesto__text" data-words>${words(about).map((word) => html`<span>${word}</span>${' '}`)}</p>
+      <div class="manifesto__text" data-words><h1>${wordSpans(lead)}</h1>${rest ? html`<p>${wordSpans(rest)}</p>` : ''}</div>
       ${pillars.length
         ? html`<ul class="pillars" role="list" data-reveal-group>
             ${pillars.map((item, i) => html`<li class="pillar" data-reveal style="--d:${i * 90}">
@@ -327,6 +338,9 @@ export function homePage(ctx) {
   if (fresh.length < 3) fresh = [...products].sort((a, b) => b.created_at - a.created_at).slice(0, 10);
   const hits = products.filter((item) => item.badge_hit);
   const featured = products.find((item) => item.featured) || null;
+  const about = brand.key === 'fit' ? settings.about_fit : settings.about_lootbox;
+  // «Brend haqida» bo'limi chiqsa, asosiy sarlavha (h1) o'sha yerda bo'ladi
+  const aboutHeading = Boolean(about && products.length);
 
   // Bo'lim raqamlari (01, 02, ...) faqat haqiqatan chiqadigan bo'limlarga beriladi.
   let n = 0;
@@ -352,21 +366,17 @@ export function homePage(ctx) {
     </div></section>`);
   }
 
-  const title = (brand.key === 'fit' ? settings.seo_title_fit : settings.seo_title_lootbox) || `${brand.name} — ${t.brand[brand.key].line}`;
-  const description = (brand.key === 'fit' ? settings.seo_desc_fit : settings.seo_desc_lootbox) || '';
-
+  const seo = homeSeo(ctx, ctx.categories);
   return page(ctx, {
-    title,
-    description,
+    title: seo.title,
+    description: seo.description,
+    keywords: seo.keywords,
+    // Tovarsiz bo'lim («Tovarlar tez orada») qidiruvga kirmaydi; asosiy bosh sahifa har doim kiradi
+    noindex: !products.length && brand.home !== '/',
     overlay: true,
     pageName: 'home',
-    body: html`${hero(ctx, slides, products)}${marquee(ctx)}${sections}${otherBrandBand(ctx)}${channelBand(ctx)}`,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      name: brand.name,
-      url: ctx.origin + brand.home,
-      sameAs: [ctx.links.uzum, ctx.links.channel, ctx.links.instagram, ctx.links.tiktok, ctx.links.youtube].filter(Boolean),
-    },
+    body: html`${hero(ctx, slides, products, { mainHeading: !aboutHeading })}${marquee(ctx)}${sections}${otherBrandBand(ctx)}${channelBand(ctx)}`,
+    // Qidiruv tizimi uchun: bu qaysi do'kon va qaysi sayt
+    jsonLd: ldGraph(organizationLd(ctx), websiteLd(ctx)),
   });
 }

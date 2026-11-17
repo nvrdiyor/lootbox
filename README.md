@@ -127,6 +127,71 @@ Qaysi tovarlar chiqishini Admin → **Hero slaydlar** → slayd → «Tugma qaye
 (Kategoriya yoki Tovar). Kategoriya tanlansa, undagi birinchi uchta tovar olinadi (tartibni Tovarlar sahifasida
 sudrab o‘zgartirasiz).
 
+## Qidiruv tizimlari (SEO): Google va Yandex
+
+Sayt qidiruv tizimlari uchun tayyor: har bir tovar, kategoriya va bo‘limning o‘z manzili, sarlavhasi va tavsifi bor,
+sayt xaritasi (`/sitemap.xml`) va robotlar uchun qoidalar (`/robots.txt`) o‘zi tuziladi, sahifalarda qidiruv tizimi
+tushunadigan ma’lumot turadi (tovar nomi, narxi, katalogdagi o‘rni).
+
+**Odamlar qidiradigan so‘zlar.** Odamlar «sichqoncha glaydi» deb emas, «skeyt», «kovrik», «скейты для мыши» deb
+qidiradi. Shuning uchun sayt har bir tovar turini odamlar tilidagi nomlari bilan ham ko‘rsatadi: sahifa sarlavhasida,
+tavsifida va «Boshqa nomlari» qatorida. Bu so‘zlar kategoriya nomidan avtomatik tanlanadi (glaydlar → skeytlar, mouse
+skates, скейты для мыши …). Ro‘yxat `server/i18n/uz.js` faylining `seo` bo‘limida turadi.
+
+O‘zingiz o‘zgartirmoqchi bo‘lsangiz (hammasi ixtiyoriy — bo‘sh maydon avtomatik to‘ladi):
+
+- **Admin → Tovarlar → tovar → «Qidiruv tizimlari (SEO)»**: qidiruv so‘zlari, sahifa sarlavhasi va tavsifi. Pastida
+  qidiruv natijasida qanday chiqishi ko‘rinib turadi.
+- **Admin → Kategoriyalar → kategoriya → «Qidiruv tizimlari (SEO)»**: shu turdagi hamma tovarga tegishli qidiruv
+  so‘zlari va kategoriya sahifasidagi kirish matni.
+- **Admin → Sozlamalar → Matnlar**: bosh sahifaning sarlavhasi va tavsifi.
+
+Qoida: so‘zlarni yig‘ib tashlamang. 5–6 ta haqiqatan ishlatiladigan nom yetarli; qidiruv tizimlari so‘z yig‘indisini
+yoqtirmaydi va saytni pastga tushiradi.
+
+### Bir marta qilinadigan ish: saytni Google va Yandex’ga tanitish
+
+Buni faqat siz qila olasiz — o‘z Google va Yandex akkauntingiz kerak. Ikkalasi 10 daqiqacha vaqt oladi.
+
+**Google Search Console**
+
+1. <https://search.google.com/search-console> ga Google akkauntingiz bilan kiring.
+2. «Add property» → «URL prefix» → `https://lootbox.uz` → «Continue».
+3. Tasdiqlash usullaridan «HTML tag» ni oching. `<meta name="google-site-verification" content="…" />` tegi chiqadi —
+   nusxalang.
+4. Saytda: Admin → Sozlamalar → Qidiruv tizimlari → «Google Search Console kodi» maydoniga qo‘ying → «Saqlash».
+5. Google’ga qaytib «Verify» ni bosing.
+6. Chap menyuda «Sitemaps» → `sitemap.xml` yozing → «Submit».
+7. Tezlashtirish uchun (ixtiyoriy): tepadagi qatorga `https://lootbox.uz/` ni yozing → «Request indexing». Eng muhim
+   sahifalar (kategoriyalar, xit tovarlar) uchun ham shunday qiling.
+
+**Yandex Webmaster**
+
+1. <https://webmaster.yandex.com> ga Yandex akkauntingiz bilan kiring → «Add site» → `https://lootbox.uz`.
+2. Tasdiqlash usuli: «Meta tag». `<meta name="yandex-verification" content="…" />` tegini nusxalang.
+3. Saytda: Admin → Sozlamalar → Qidiruv tizimlari → «Yandex Webmaster kodi» → «Saqlash». Yandex’da «Check» ni bosing.
+4. «Indexing» → «Sitemap files» → `https://lootbox.uz/sitemap.xml` → «Add».
+5. «Site information» → «Regionality»: O‘zbekiston (Toshkent) ni tanlang.
+
+Yandex’ga (va Bing’ga) yangilanishlar haqida sayt o‘zi xabar beradi: admin panelda tovar qo‘shsangiz yoki
+o‘zgartirsangiz, bir necha daqiqada bilishadi (IndexNow; Sozlamalar → Qidiruv tizimlari’da o‘chirish mumkin). Google
+bu usulni qo‘llamaydi — u sayt xaritasini o‘zi o‘qib turadi.
+
+### Nimani kutish mumkin
+
+- **Vaqt.** Birinchi sahifalar qidiruvda bir necha kundan 2–3 haftagacha chiqa boshlaydi. Holatini Search Console va
+  Webmaster’da ko‘rasiz.
+- **Brend so‘rovlari** («lootbox uz», «lootbox kovrik») — eng tez va deyarli aniq chiqadi.
+- **Tovar turi + niyat yoki shahar** («sichqoncha skeyti Toshkent», «kovrik sotib olish», «скейты для мыши Ташкент»,
+  «грипсы для мыши купить») — real maqsad: bu yerda raqobat kam.
+- **Bitta umumiy so‘z** («skate», «kovrik») bo‘yicha birinchi o‘rinni hech kim va’da qila olmaydi: u yerda Uzum, OLX va
+  yirik do‘konlar turadi, «skate» esa ko‘pincha skeytbordni anglatadi.
+- **Nima yordam beradi:** Uzum’dagi do‘kon tavsifi, Telegram kanal va Instagram profilida sayt havolasi turishi;
+  tovarlarga batafsil, o‘zingiz yozgan tavsif; yangi tovarlar muntazam qo‘shilishi.
+- **Rus tili.** O‘zbekistonda bunday tovarlarni ko‘pchilik ruscha qidiradi. Hozir ruscha nomlar sahifalarda bor, lekin
+  saytning o‘zi o‘zbekcha. Ruscha so‘rovlar uchun eng katta keyingi qadam — saytning to‘liq ruscha versiyasi
+  (pastdagi «Rus tilini qo‘shish» bo‘limi).
+
 ## Logotipni almashtirish
 
 Hozir logotip — chizilgan «LOOTBOX» so‘zi. O‘z logotipingizni qo‘yish uchun faylni shu nom bilan tashlang:
@@ -159,6 +224,7 @@ LOOTBOX tovarlariga va o‘zingiz qo‘shgan tovarlarga tegilmaydi. Namunani qay
 | `npm run shots` | Saytni ko‘rinmas Chrome’da ochib, animatsiyali holatini suratga oladi: `data/shots/` (server ishlab turganda) |
 | `npm run catalog` | Uzum’dagi tovarlar: yo‘g‘ini bazaga qo‘shadi, rasmsiziga tayyor (fonsiz) rasmini biriktiradi. `-- --replace-images` bilan: yangilangan rasmlarni eskilari o‘rniga yozadi |
 | `npm run cutouts` | Tovar rasmlarini manba suratlardan qaytadan yasaydi (fonini olib tashlaydi): `server/db/catalog-media/` (internet va Chrome kerak) |
+| `npm run indexnow` | Saytning hamma sahifasini Yandex va Bing’ga bir yo‘la xabar qiladi (faqat serverda, `SITE_URL` bor joyda; `-- --dry` — faqat ro‘yxatni ko‘rsatadi). Odatda kerak emas: tovar saqlanganda sayt o‘zi xabar beradi |
 | `npm run seed` | FIT bo‘limidagi namuna (demo) ma’lumot (`-- --reset`, `-- --clear`) |
 | `npm run og` | Telegram va ijtimoiy tarmoqlar uchun muqova rasmlarini qayta yaratadi (server ishlab turganda) |
 
@@ -185,7 +251,8 @@ server/
   db/        baza sxemasi, so‘rovlar (repo.js), Uzum’dagi tovarlar (catalog-data.js) va ularning fonsiz
              rasmlari (catalog-media/), namuna (seed.js)
   lib/       havolalar, rasm tekshiruvi, admin himoyasi, HTML shablon yordamchisi
-  site/      sayt sahifalari: bosh sahifa, katalog, tovar; chizmalar (art.js), logotip (brand.js)
+  site/      sayt sahifalari: bosh sahifa, katalog, tovar; chizmalar (art.js), logotip (brand.js),
+             qidiruv tizimlari uchun sarlavha, tavsif va ma’lumot (seo.js), sayt xaritasi (sitemap.js)
   admin/     admin panel sahifalari va API
   i18n/      sayt matnlari (uz.js)
   dev/       faqat dev rejimida: avto-yangilanish, chizmalar va muqova ko‘rinishi

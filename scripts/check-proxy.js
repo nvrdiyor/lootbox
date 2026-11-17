@@ -50,6 +50,27 @@ ok(!home.includes('http://localhost'), 'havolalar: sahifada ichki manzil chiqmay
 const sitemap = await (await request(SITE, '/sitemap.xml')).text();
 ok(sitemap.includes('<loc>https://lootbox.test/</loc>') && !sitemap.includes('evil'), 'sitemap: manzillar SITE_URL dan');
 
+// ---- IndexNow: haqiqiy saytda yoqiladi, yuboriladigan narsa — faqat sayt manzillari ------------
+// Tekshiruv internetga chiqmaydi: yuborish o'rniga soxta "fetch" beriladi, navbat esa darhol o'chirib qo'yiladi.
+const indexnow = await import('../server/lib/indexnow.js');
+ok(indexnow.indexNowEnabled(), 'indexnow: https manzilli saytda yoqilgan');
+repo.saveSettings({ indexnow: '0' });
+ok(!indexnow.indexNowEnabled() && indexnow.queueUrls('/katalog') === false, 'indexnow: sozlamada o‘chirilsa hech narsa yuborilmaydi');
+let sent = null;
+const submitted = await indexnow.submitUrls(['/katalog', '/katalog', '/tovar/sinov', 'https://evil.example/'], {
+  fetchImpl: async (url, init) => {
+    sent = { url, body: JSON.parse(init.body) };
+    return { status: 202 };
+  },
+});
+ok(
+  submitted.ok && submitted.count === 2 && sent.url === 'https://yandex.com/indexnow' && sent.body.host === SITE &&
+    sent.body.urlList.join(' ') === 'https://lootbox.test/katalog https://lootbox.test/tovar/sinov' &&
+    sent.body.keyLocation === `https://lootbox.test/${sent.body.key}.txt`,
+  'indexnow: so‘rovda faqat o‘z saytimizning manzillari va kalit fayli manzili bor',
+);
+eq(await (await request(SITE, `/${sent.body.key}.txt`)).text(), sent.body.key, 'indexnow: kalit fayli sayt manzilida ochiladi');
+
 // ---- Parol urinishlari: IP faqat proksi qo'ygan qiymatdan olinadi ------------------
 const login = (pw, headers = {}) =>
   request(SITE, '/admin/login', {

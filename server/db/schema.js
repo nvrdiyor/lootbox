@@ -133,4 +133,24 @@ export const MIGRATIONS = [
   `
   ALTER TABLE images ADD COLUMN cutout INTEGER NOT NULL DEFAULT 0;
   `,
+  // Qidiruv tizimlari uchun (SEO). search_terms — odamlar shu tovarni qanday nomlar bilan qidirishi (vergul bilan),
+  // meta_title / meta_description — qidiruv natijasida chiqadigan sarlavha va tavsif, intro — kategoriya sahifasidagi
+  // kirish matni. Bo'sh bo'lsa sayt ularni o'zi tuzadi (server/site/seo.js).
+  `
+  ALTER TABLE products ADD COLUMN search_terms TEXT NOT NULL DEFAULT '';
+  ALTER TABLE products ADD COLUMN meta_title TEXT NOT NULL DEFAULT '';
+  ALTER TABLE products ADD COLUMN meta_description TEXT NOT NULL DEFAULT '';
+  ALTER TABLE categories ADD COLUMN search_terms TEXT NOT NULL DEFAULT '';
+  ALTER TABLE categories ADD COLUMN meta_title TEXT NOT NULL DEFAULT '';
+  ALTER TABLE categories ADD COLUMN meta_description TEXT NOT NULL DEFAULT '';
+  ALTER TABLE categories ADD COLUMN intro TEXT NOT NULL DEFAULT '';
+  `,
+  // LOOTBOX bosh sahifasining boshlang'ich sarlavha va tavsifi odamlar qidiradigan so'zlar bilan yangilanadi
+  // (skeyt, kovrik). Faqat egasi admin panelda o'zgartirmagan bo'lsa: eski boshlang'ich matn turgan bo'lsagina.
+  `
+  UPDATE settings SET value = 'LOOTBOX — gaming aksessuarlari: skeytlar, kovriklar, switchlar'
+    WHERE key = 'seo_title_lootbox' AND value = 'LOOTBOX — texnika va gaming aksessuarlari';
+  UPDATE settings SET value = 'Sichqoncha skeytlari (glaydlar), kovriklar, mexanik klaviatura switchlari va grip stikerlar. O‘zbekiston bo‘ylab Uzum Market orqali yetkazib beriladi. Скейты и коврики для мыши, свитчи, грипсы.'
+    WHERE key = 'seo_desc_lootbox' AND value = 'Sichqoncha glaydlari, mexanik klaviatura switchlari, gilamchalar va grip stikerlar. Uzum Market orqali yetkazib beriladi.';
+  `,
 ];

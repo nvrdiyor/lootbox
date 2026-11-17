@@ -1,7 +1,11 @@
 // Tovar muharriri (yangi tovar va mavjud tovarni tahrirlash).
 import { html, raw, jsonScript } from '../../lib/html.js';
 import { productCode, formatNumber } from '../../lib/text.js';
-import { listCategories } from '../../db/repo.js';
+import { config } from '../../config.js';
+import { listCategories, getSettings } from '../../db/repo.js';
+import { dictionary } from '../../i18n/index.js';
+import { brandOf } from '../../site/brand.js';
+import { productSeo } from '../../site/seo.js';
 import { LIMITS } from '../validate.js';
 import { ic } from '../icons.js';
 import { shell } from '../layout.js';
@@ -27,6 +31,7 @@ export function productEditPage(c, product, preset = {}) {
     id: '', brand: preset.brand === 'fit' ? 'fit' : 'lootbox', category_id: preset.category ?? null, slug: '', name: '', tagline: '',
     description: '', features: '', price: null, old_price: null, badge_new: 0, badge_hit: 0, featured: 0, visible: 1,
     dest_type: 'default', uzum_url: '', channel_url: '', dm_username: '', art: '', images: [], is_demo: 0,
+    search_terms: '', meta_title: '', meta_description: '',
   };
   // Yangi tovarda kategoriya berilgan bo'lsa, brend ham shunga mos bo'ladi
   if (isNew && item.category_id) {
@@ -35,6 +40,11 @@ export function productEditPage(c, product, preset = {}) {
     else item.category_id = null;
   }
   const onSite = !isNew && item.visible && (!item.category || item.category.visible);
+
+  // Qidiruv tizimlari uchun matnlar: admin yozmagan bo'lsa sayt o'zi tuzadi — o'sha avtomatik qiymatlar maydonlarda
+  // kulrang matn bo'lib ko'rinadi (saytdagi bilan aynan bir xil qoida: site/seo.js)
+  const settings = getSettings();
+  const seo = isNew ? null : productSeo({ t: dictionary(), brand: brandOf(item.brand), settings, showPrices: settings.show_prices !== '0' }, item);
 
   const categoryOptions = [
     { value: '', label: 'Kategoriyasiz' },
@@ -73,6 +83,25 @@ export function productEditPage(c, product, preset = {}) {
       <div class="stack">
         ${textarea({ name: 'description', label: 'Tavsif', value: item.description, rows: 7, maxlength: LIMITS.description, counter: true, hint: 'Yangi paragraf uchun bitta bo‘sh qator qoldiring.' })}
         ${textarea({ name: 'features', label: 'Xususiyatlar', value: item.features, rows: 6, maxlength: LIMITS.features, mono: true, placeholder: 'Material: teflon (PTFE)\nQalinligi: 0,8 mm\nTo‘plamda: 2 dona', hint: 'Har qatorga bitta xususiyat: «Nomi: qiymati». Ikki nuqtasiz qator oddiy band bo‘lib chiqadi.' })}
+      </div>
+    </section>
+
+    <section class="card" id="seo">
+      <header class="card__head">
+        <div><h2 class="card__title">Qidiruv tizimlari (SEO)</h2><p class="card__sub">Google va Yandex’da tovar qanday chiqishi. Hech narsa yozmasangiz, sayt hammasini o‘zi tuzadi${seo ? ': maydonlardagi kulrang matn — o‘sha avtomatik variant' : ''}.</p></div>
+      </header>
+      <div class="stack">
+        ${field({ name: 'search_terms', label: 'Qidiruv so‘zlari', value: item.search_terms, maxlength: LIMITS.searchTerms, placeholder: seo?.auto.terms.join(', ') || 'kovrik, mousepad, коврик для мыши', hint: `Odamlar bu tovarni qanday nomlar bilan qidiradi: vergul bilan yozing, eng ko‘p ishlatiladigani birinchi. Lotin, kirill, ruscha, inglizcha — farqi yo‘q. Eng ko‘pi ${LIMITS.searchTermCount} ta. Tovar sahifasida «Boshqa nomlari» qatorida ko‘rinadi. Bo‘sh bo‘lsa — kategoriyaniki olinadi.` })}
+        ${field({ name: 'meta_title', label: 'Sahifa sarlavhasi', value: item.meta_title, maxlength: LIMITS.metaTitle, placeholder: seo?.auto.title || '', hint: 'Qidiruv natijasidagi ko‘k sarlavha va brauzer oynasining nomi. Taxminan 60 belgigacha to‘liq ko‘rinadi.' })}
+        ${textarea({ name: 'meta_description', label: 'Sahifa tavsifi', value: item.meta_description, rows: 3, maxlength: LIMITS.metaDescription, counter: true, placeholder: seo?.auto.description || '', hint: 'Qidiruv natijasida sarlavha ostidagi matn (Telegramda havola ostida ham chiqadi). Taxminan 160 belgigacha to‘liq ko‘rinadi.' })}
+        ${seo
+          ? html`<div class="serp">
+              <p class="serp__label">Hozir qidiruvda taxminan shunday chiqadi</p>
+              <p class="serp__url">${config.siteHost || 'lootbox.uz'} › tovar › <span data-serp-slug>${item.slug}</span></p>
+              <p class="serp__title" data-serp-title>${seo.title}</p>
+              <p class="serp__text" data-serp-text>${seo.description}</p>
+            </div>`
+          : ''}
       </div>
     </section>
 

@@ -26,7 +26,7 @@ export function initReveal() {
   }
 
   // --- So'zma-so'z yonadigan matn
-  const blocks = [...document.querySelectorAll('[data-words]')].map((el) => ({ el, spans: [...el.children], lit: -1 }));
+  const blocks = [...document.querySelectorAll('[data-words]')].map((el) => ({ el, spans: [...el.querySelectorAll('span')], lit: -1 }));
   if (blocks.length) {
     if (reduced) {
       for (const block of blocks) for (const span of block.spans) span.classList.add('is-lit');

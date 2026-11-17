@@ -1,7 +1,7 @@
 // Ma'lumotlar bilan ishlash: sayt va admin shu funksiyalar orqali o'qiydi/yozadi.
 // Qatorlar bazadagi ustun nomlari bilan qaytadi (snake_case), ustiga:
 //   product.images   — [{ id, url, thumb_url, thumb_width, width, height, color, cutout }]
-//   product.category — { id, slug, name, art } yoki null
+//   product.category — { id, slug, name, art, visible, search_terms } yoki null
 import { all, get, run, tx, allDynamic, runDynamic, placeholders, now } from './index.js';
 import { removeImageFiles } from '../lib/images.js';
 import { slugify } from '../lib/text.js';
@@ -36,6 +36,11 @@ export const SETTING_DEFAULTS = Object.freeze({
   seo_desc_lootbox: '',
   seo_title_fit: '',
   seo_desc_fit: '',
+  // Qidiruv tizimlari: saytni tasdiqlash kodlari (Google Search Console, Yandex Webmaster) va
+  // o'zgargan sahifalar haqida qidiruv tizimlariga xabar berish (IndexNow)
+  google_verification: '',
+  yandex_verification: '',
+  indexnow: '1',
 });
 
 let settingsCache = null;
@@ -187,7 +192,10 @@ function uniqueCategorySlug(brand, base, excludeId = 0) {
   return slug;
 }
 
-const CATEGORY_FIELDS = ['brand', 'name', 'tagline', 'art', 'image_id', 'visible'];
+const CATEGORY_FIELDS = ['brand', 'name', 'tagline', 'art', 'image_id', 'visible', 'search_terms', 'meta_title', 'meta_description', 'intro'];
+// Bo'sh qoldirilishi mumkin bo'lgan matn maydonlari (bazada NOT NULL): berilmasa bo'sh satr yoziladi
+const OPTIONAL_TEXT = new Set(['search_terms', 'meta_title', 'meta_description', 'intro']);
+const fieldValue = (data, field) => data[field] ?? (OPTIONAL_TEXT.has(field) ? '' : null);
 
 export function createCategory(data) {
   return tx(() => {
@@ -195,7 +203,7 @@ export function createCategory(data) {
     const slug = uniqueCategorySlug(data.brand, data.slug || slugify(data.name, 'kategoriya'));
     const sort = (get('SELECT MAX(sort) AS m FROM categories WHERE brand = ?', data.brand).m ?? 0) + 1;
     const cols = [...CATEGORY_FIELDS, 'slug', 'sort', 'is_demo', 'created_at', 'updated_at'];
-    const values = [...CATEGORY_FIELDS.map((f) => data[f] ?? null), slug, sort, data.is_demo ? 1 : 0, ts, ts];
+    const values = [...CATEGORY_FIELDS.map((f) => fieldValue(data, f)), slug, sort, data.is_demo ? 1 : 0, ts, ts];
     const info = runDynamic(`INSERT INTO categories (${cols.join(',')}) VALUES (${placeholders(cols)})`, values);
     return Number(info.lastInsertRowid);
   });
@@ -207,7 +215,7 @@ export function updateCategory(id, data) {
   tx(() => {
     const slug = uniqueCategorySlug(data.brand, data.slug || slugify(data.name, 'kategoriya'), id);
     const cols = [...CATEGORY_FIELDS, 'slug', 'updated_at'];
-    const values = [...CATEGORY_FIELDS.map((f) => data[f] ?? null), slug, now(), id];
+    const values = [...CATEGORY_FIELDS.map((f) => fieldValue(data, f)), slug, now(), id];
     runDynamic(`UPDATE categories SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`, values);
     // Kategoriya boshqa brendga ko'chsa, tovarlari ham birga ko'chadi.
     if (previous.brand !== data.brand) run('UPDATE products SET brand = ? WHERE category_id = ?', data.brand, id);
@@ -238,7 +246,8 @@ export const patchCategory = (id, field, value) => {
 // ---- Tovarlar --------------------------------------------------------------
 
 const PRODUCT_SELECT = `
-  SELECT p.*, c.slug AS category_slug, c.name AS category_name, c.art AS category_art, c.visible AS category_visible
+  SELECT p.*, c.slug AS category_slug, c.name AS category_name, c.art AS category_art, c.visible AS category_visible,
+    c.search_terms AS category_search_terms
   FROM products p LEFT JOIN categories c ON c.id = p.category_id`;
 
 const PRODUCT_ORDERS = {
@@ -262,9 +271,9 @@ function hydrateProducts(rows) {
     byProduct.get(row.product_id).push(mapImage(row));
   }
   return rows.map((row) => {
-    const { category_slug, category_name, category_art, category_visible, ...product } = row;
+    const { category_slug, category_name, category_art, category_visible, category_search_terms, ...product } = row;
     product.category = row.category_id && category_slug
-      ? { id: row.category_id, slug: category_slug, name: category_name, art: category_art, visible: category_visible }
+      ? { id: row.category_id, slug: category_slug, name: category_name, art: category_art, visible: category_visible, search_terms: category_search_terms || '' }
       : null;
     product.images = byProduct.get(row.id) || [];
     return product;
@@ -307,7 +316,7 @@ export function listProducts(filter = {}) {
   let rows = allDynamic(sql, params);
   if (term) {
     rows = rows.filter((row) =>
-      [row.name, row.slug, row.tagline, row.category_name].some((value) => String(value || '').toLowerCase().includes(term)),
+      [row.name, row.slug, row.tagline, row.category_name, row.search_terms, row.category_search_terms].some((value) => String(value || '').toLowerCase().includes(term)),
     );
     if (limit) rows = rows.slice(0, limit);
   }
@@ -337,6 +346,7 @@ function uniqueProductSlug(base, excludeId = 0) {
 const PRODUCT_FIELDS = [
   'brand', 'category_id', 'name', 'tagline', 'description', 'features', 'price', 'old_price',
   'badge_new', 'badge_hit', 'featured', 'visible', 'dest_type', 'uzum_url', 'channel_url', 'dm_username', 'art',
+  'search_terms', 'meta_title', 'meta_description',
 ];
 
 function setProductImages(productId, imageIds) {
@@ -356,7 +366,7 @@ export function createProduct(data, imageIds = []) {
     // Yangi tovar ro'yxat boshida turadi.
     const sort = (get('SELECT MIN(sort) AS m FROM products WHERE brand = ?', data.brand).m ?? 1) - 1;
     const cols = [...PRODUCT_FIELDS, 'slug', 'sort', 'is_demo', 'created_at', 'updated_at'];
-    const values = [...PRODUCT_FIELDS.map((f) => data[f] ?? null), slug, data.sort ?? sort, data.is_demo ? 1 : 0, ts, ts];
+    const values = [...PRODUCT_FIELDS.map((f) => fieldValue(data, f)), slug, data.sort ?? sort, data.is_demo ? 1 : 0, ts, ts];
     const info = runDynamic(`INSERT INTO products (${cols.join(',')}) VALUES (${placeholders(cols)})`, values);
     const id = Number(info.lastInsertRowid);
     setProductImages(id, imageIds);
@@ -369,7 +379,7 @@ export function updateProduct(id, data, imageIds) {
   const removed = tx(() => {
     const slug = uniqueProductSlug(data.slug || slugify(data.name), id);
     const cols = [...PRODUCT_FIELDS, 'slug', 'updated_at'];
-    const values = [...PRODUCT_FIELDS.map((f) => data[f] ?? null), slug, now(), id];
+    const values = [...PRODUCT_FIELDS.map((f) => fieldValue(data, f)), slug, now(), id];
     runDynamic(`UPDATE products SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`, values);
     return Array.isArray(imageIds) ? setProductImages(id, imageIds) : [];
   });

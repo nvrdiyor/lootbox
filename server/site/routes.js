@@ -3,12 +3,15 @@
 //   /katalog[/kategoriya]                               /fit/katalog[/kategoriya]
 //   /tovar/:slug         tovar sahifasi (brendi tovarning o'zidan aniqlanadi)
 //   POST /api/track      ko'rish va tugma bosish statistikasi
+//   /robots.txt, /sitemap.xml, /<kalit>.txt   qidiruv tizimlari uchun (kalit — IndexNow, lib/indexnow.js)
 import { bodyLimit } from 'hono/body-limit';
 import { esc } from '../lib/html.js';
-import { getProductBySlug, listProducts, listCategories, trackEvent, STAT_KINDS } from '../db/repo.js';
+import { getProductBySlug, trackEvent, STAT_KINDS } from '../db/repo.js';
 import { clientIp, sameOrigin } from '../lib/auth.js';
+import { isIndexNowKey } from '../lib/indexnow.js';
 import { BRANDS, faviconSvg } from './brand.js';
-import { makeContext, productUrl, categoryUrl } from './context.js';
+import { makeContext } from './context.js';
+import { siteEntries } from './sitemap.js';
 import { homePage } from './pages/home.js';
 import { catalogPage } from './pages/catalog.js';
 import { productPage } from './pages/product.js';
@@ -82,24 +85,37 @@ export function mountSite(app) {
   );
   app.get('/favicon.ico', (c) => c.redirect('/favicon.svg', 302));
 
+  // Qidiruv robotlari uchun qoidalar. Clean-param (Yandex): katalogdagi ?sort=... bir xil sahifaning boshqa
+  // tartibi, alohida sahifa emas (Google uchun buni sahifadagi canonical havola aytadi).
   app.get('/robots.txt', (c) => {
     const origin = makeContext(c, 'lootbox').origin;
-    return c.text(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ${origin}/sitemap.xml\n`);
+    const lines = [
+      'User-agent: *',
+      'Allow: /',
+      'Disallow: /admin',
+      'Disallow: /api/',
+      ...Object.values(BRANDS).map((brand) => `Clean-param: sort ${brand.catalog}`),
+      '',
+      `Sitemap: ${origin}/sitemap.xml`,
+      '',
+    ];
+    return c.text(lines.join('\n'), 200, { 'Cache-Control': 'public, max-age=3600' });
   });
 
+  // Sayt xaritasi: qidiruvga beriladigan hamma sahifa va har biri oxirgi marta qachon o'zgargani
   app.get('/sitemap.xml', (c) => {
     const origin = makeContext(c, 'lootbox').origin;
-    const urls = [];
-    for (const brand of Object.values(BRANDS)) {
-      urls.push(brand.home, brand.catalog);
-      for (const cat of listCategories({ brand: brand.key, visibleOnly: true })) {
-        if (cat.product_count > 0) urls.push(categoryUrl(brand.key, cat));
-      }
-    }
-    for (const product of listProducts({ visibleOnly: true })) urls.push(productUrl(product));
-    const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
-      .map((path) => `  <url><loc>${esc(origin + path)}</loc></url>`)
-      .join('\n')}\n</urlset>\n`;
+    const day = (ts) => new Date(ts).toISOString().slice(0, 10);
+    const urls = siteEntries().map(
+      (entry) => `  <url><loc>${esc(origin + entry.path)}</loc>${entry.lastmod ? `<lastmod>${day(entry.lastmod)}</lastmod>` : ''}</url>`,
+    );
+    const body = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">', ...urls, '</urlset>', ''].join('\n');
     return c.body(body, 200, { 'Content-Type': 'application/xml; charset=utf-8' });
+  });
+
+  // IndexNow kalit fayli: /<32 ta belgi>.txt — ichida kalitning o'zi (lib/indexnow.js)
+  app.get('/:key{[a-f0-9]{32}[.]txt}', (c) => {
+    const key = c.req.param('key').slice(0, 32);
+    return isIndexNowKey(key) ? c.text(key, 200, { 'Cache-Control': 'public, max-age=3600' }) : renderNotFound(c);
   });
 }

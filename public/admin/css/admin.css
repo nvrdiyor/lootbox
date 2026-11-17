@@ -974,6 +974,21 @@ legend.field__label { margin-bottom: 7px; }
 .dest-preview.is-none .dest-preview__icon { background: var(--danger-soft); color: var(--danger); }
 .dest-preview.is-loading { opacity: .7; }
 .dest-fields { display: grid; gap: 16px; }
+
+/* Qidiruv natijasida sahifa qanday ko'rinishi (tovar muharriri) */
+.serp { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); }
+.serp__label { margin-bottom: 8px; font: 500 .7rem var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.serp__url { font: 500 .76rem/1.4 var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; }
+.serp__title { margin-top: 4px; font-size: 1.05rem; font-weight: 700; line-height: 1.35; color: #8ab4f8; overflow-wrap: anywhere; }
+.serp__text { margin-top: 4px; font-size: .86rem; line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* Yig'ilib turadigan qo'shimcha bo'lim (kategoriya oynasidagi «Qidiruv tizimlari») */
+.more { border: 1px solid var(--line); border-radius: 12px; background: var(--raised); }
+.more > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; font-weight: 700; font-size: .92rem; cursor: pointer; list-style: none; }
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary::after { content: '+'; font: 500 1.1rem var(--font-mono); color: var(--muted); }
+.more[open] > summary::after { content: '−'; }
+.more > .stack { padding: 4px 14px 16px; }
 .dest-fields .field.is-primary .field__label::after {
   content: 'asosiy tugma';
   margin-left: 8px;

@@ -1,11 +1,14 @@
 // Kategoriyalar: har brend uchun alohida ro'yxat, sudrab tartiblash, oynada tahrirlash.
 import { html, raw, attrs, jsonScript } from '../../lib/html.js';
-import { listCategories } from '../../db/repo.js';
+import { listCategories, listProducts, getSettings } from '../../db/repo.js';
+import { dictionary } from '../../i18n/index.js';
+import { brandOf } from '../../site/brand.js';
+import { categorySeo } from '../../site/seo.js';
 import { artSvg, toneFor, toneStyle } from '../../site/art.js';
 import { LIMITS } from '../validate.js';
 import { ic } from '../icons.js';
 import { shell } from '../layout.js';
-import { field, switchRow, segmented, glyphPicker, uploader, switchOnly, BRAND_LABEL } from '../ui.js';
+import { field, textarea, switchRow, segmented, glyphPicker, uploader, switchOnly, BRAND_LABEL } from '../ui.js';
 
 const BRAND_KEYS = ['lootbox', 'fit'];
 
@@ -35,6 +38,15 @@ function row(cat) {
 
 export function categoriesPage(c) {
   const categories = listCategories({});
+  // Qidiruv tizimlari uchun avtomatik matnlar (admin yozmasa sayt shularni ishlatadi) — oynada kulrang matn bo'lib turadi
+  const settings = getSettings();
+  const t = dictionary();
+  const autoSeo = (cat) =>
+    categorySeo(
+      { t, brand: brandOf(cat.brand), settings, showPrices: settings.show_prices !== '0' },
+      cat,
+      listProducts({ brand: cat.brand, categoryId: cat.id, visibleOnly: true }),
+    ).auto;
 
   const body = html`
     <p class="lead">Kategoriyalar saytning menyusida, katalogda va bosh sahifadagi ro‘yxatda chiqadi. Ichida ko‘rinadigan tovari bo‘lmagan kategoriya saytda ko‘rsatilmaydi.</p>
@@ -73,6 +85,16 @@ export function categoriesPage(c) {
             <p class="field__hint">Bo‘sh qoldirsangiz, nomdan o‘zi yasaladi.</p>
             <p class="field__error" data-error hidden></p>
           </div>
+          <details class="more" data-seo-details>
+            <summary>Qidiruv tizimlari (SEO)</summary>
+            <div class="stack">
+              <p class="note"><span>Google va Yandex’da kategoriya qanday chiqishi. Bo‘sh qoldirsangiz, sayt o‘zi tuzadi — maydonlardagi kulrang matn shuni ko‘rsatadi.</span></p>
+              ${field({ name: 'search_terms', label: 'Qidiruv so‘zlari', maxlength: LIMITS.searchTerms, placeholder: 'kovrik, mousepad, коврик для мыши', hint: `Odamlar shu turdagi tovarni qanday nomlar bilan qidiradi: vergul bilan, eng ko‘p ishlatiladigani birinchi. Eng ko‘pi ${LIMITS.searchTermCount} ta. Kategoriya va undagi tovarlar sahifasida «Boshqa nomlari» qatorida ko‘rinadi.` })}
+              ${textarea({ name: 'intro', label: 'Kirish matni', rows: 4, maxlength: LIMITS.categoryIntro, counter: true, hint: 'Kategoriya sahifasida sarlavha ostida chiqadi: bu nima va kimga kerak — 2–3 jumla.' })}
+              ${field({ name: 'meta_title', label: 'Sahifa sarlavhasi', maxlength: LIMITS.metaTitle, hint: 'Qidiruv natijasidagi ko‘k sarlavha. Taxminan 60 belgigacha to‘liq ko‘rinadi.' })}
+              ${textarea({ name: 'meta_description', label: 'Sahifa tavsifi', rows: 3, maxlength: LIMITS.metaDescription, counter: true, hint: 'Qidiruv natijasida sarlavha ostidagi matn. Taxminan 160 belgigacha to‘liq ko‘rinadi.' })}
+            </div>
+          </details>
           ${glyphPicker({ name: 'art', value: 'box', label: 'Belgi', hint: 'Rasmi yo‘q tovarlar va kategoriya kartochkasi uchun chizma.' })}
           <div class="field" data-field="image_id">
             <span class="field__label">Muqova rasmi (ixtiyoriy)</span>
@@ -94,6 +116,8 @@ export function categoriesPage(c) {
       categories: categories.map((cat) => ({
         id: cat.id, brand: cat.brand, name: cat.name, slug: cat.slug, tagline: cat.tagline, art: cat.art,
         visible: cat.visible, image: cat.image, product_total: cat.product_total,
+        search_terms: cat.search_terms, meta_title: cat.meta_title, meta_description: cat.meta_description, intro: cat.intro,
+        auto: autoSeo(cat),
       })),
     })}</script>`;
 
